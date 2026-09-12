@@ -16,10 +16,9 @@ export function getAllPanels(db: DB) {
 }
 
 export class Panel {
-  private BASE_PATH = "/panel/api/inbounds";
+  private INBOUNDS_PATH = "/panel/api/inbounds";
+  private CLIENTS_PATH = "/panel/api/clients";
   private LOGIN_PATH = "/login";
-  private UPDATE_CLIENT_PATH = "/updateClient/";
-  private GET_INBOUNDS_PATH = "/list";
   private UUID_ABS_PATH = "/panel/api/server/getNewUUID";
   private STATUS_ABS_PATH = "/panel/api/server/status";
 
@@ -41,42 +40,48 @@ export class Panel {
     this.password = password;
   }
 
-  getUpdatePath(url: string, uuid: string) {
-    return `${url}${this.BASE_PATH}${this.UPDATE_CLIENT_PATH}${uuid}`;
+  getUpdatePath(_url: string, email: string) {
+    return `${this.url}${this.CLIENTS_PATH}/update/${encodeURIComponent(email)}`;
   }
 
-  getAddClientPath(url: string) {
-    return `${url}${this.BASE_PATH}/addClient`;
+  getAddClientPath(_url: string) {
+    return `${this.url}${this.CLIENTS_PATH}/add`;
+  }
+
+  private parseInbound(obj: any): Obj {
+    // New API returns settings/streamSettings/sniffing as nested objects;
+    // old panels returned them as JSON-encoded strings. Accept both.
+    const parseIfString = (v: unknown) =>
+      typeof v === "string" && v.length > 0 ? JSON.parse(v) : v;
+    return {
+      ...obj,
+      settings: parseIfString(obj.settings) as Settings,
+      streamSettings: parseIfString(obj.streamSettings) as StreamSettings,
+      sniffing: parseIfString(obj.sniffing) ?? obj.sniffing,
+    } as Obj;
   }
 
   async getInboundByID(inboundID: number) {
-    const url = `${this.url}${this.BASE_PATH}/get/${inboundID}`;
+    await this.handleLogin();
+
+    const url = `${this.url}${this.INBOUNDS_PATH}/get/${inboundID}`;
     const req = Util.newGetRequest(url, this.headers);
 
     const res = await fetch(req);
-    const js = (await res.json()) as Omit<GetInboundResponse, "obj"> & {
-      obj: Omit<Obj, "settings" | "streamSettings"> & {
-        settings: string;
-        streamSettings: string;
-      };
-    };
+    const js = (await res.json()) as GetInboundResponse;
 
     const parsed: GetInboundResponse = {
       ...js,
-      obj: js.obj && {
-        ...js.obj,
-        settings: JSON.parse(js.obj.settings) as Settings,
-        streamSettings: JSON.parse(js.obj.streamSettings) as StreamSettings,
-      },
+      obj: js.obj && this.parseInbound(js.obj),
     };
 
     return parsed;
   }
 
-  async resetClientTraffic(inboundID: number, email: string) {
+  async resetClientTraffic(_inboundID: number, email: string) {
     await this.handleLogin();
 
-    const url = `${this.url}${this.BASE_PATH}/${inboundID}/resetClientTraffic/${email}`;
+    const url = `${this.url}${this.CLIENTS_PATH}/resetTraffic/${encodeURIComponent(email)}`;
 
     const req = Util.newPostRequest(url, this.headers);
     const res = await fetch(req);
@@ -91,26 +96,17 @@ export class Panel {
   async getInbounds() {
     await this.handleLogin();
 
-    const url = `${this.url}${this.BASE_PATH}${this.GET_INBOUNDS_PATH}`;
+    const url = `${this.url}${this.INBOUNDS_PATH}/list`;
     const req = Util.newGetRequest(url, this.headers);
 
     try {
       const res = await fetch(req);
 
-      const js = (await res.json()) as Omit<GetInboundsResponse, "obj"> & {
-        obj: (Omit<Obj, "settings" | "streamSettings"> & {
-          settings: string;
-          streamSettings: string;
-        })[];
-      };
+      const js = (await res.json()) as GetInboundsResponse;
 
       const parsed: GetInboundsResponse = {
         ...js,
-        obj: js.obj.map((obj) => ({
-          ...obj,
-          settings: JSON.parse(obj.settings) as Settings,
-          streamSettings: JSON.parse(obj.streamSettings) as StreamSettings,
-        })),
+        obj: (js.obj ?? []).map((obj) => this.parseInbound(obj)),
       };
 
       return parsed;
@@ -118,6 +114,60 @@ export class Panel {
       console.error("Failed to get all inbounds:", error);
       return;
     }
+  }
+
+  async getClients(): Promise<GetClientsResponse | undefined> {
+    await this.handleLogin();
+
+    const url = `${this.url}${this.CLIENTS_PATH}/list`;
+    const req = Util.newGetRequest(url, this.headers);
+
+    try {
+      const res = await fetch(req);
+      const js = (await res.json()) as GetClientsResponse;
+      return js;
+    } catch (error) {
+      console.error("Failed to get clients list:", error);
+      return;
+    }
+  }
+
+  async getClientByEmail(email: string) {
+    await this.handleLogin();
+
+    const url = `${this.url}${this.CLIENTS_PATH}/get/${encodeURIComponent(email)}`;
+    const req = Util.newGetRequest(url, this.headers);
+
+    try {
+      const res = await fetch(req);
+      const js = (await res.json()) as GetClientResponse;
+      return js;
+    } catch (error) {
+      console.error("Failed to get client:", error);
+      return;
+    }
+  }
+
+  async addClient(inboundID: number, client: NewPanelClient) {
+    await this.handleLogin();
+
+    const url = `${this.url}${this.CLIENTS_PATH}/add`;
+    const body = JSON.stringify({ client, inboundIds: [inboundID] });
+    const req = Util.newPostRequest(url, this.headers, body);
+
+    const res = await fetch(req);
+    return res;
+  }
+
+  async updateClient(email: string, client: PanelClientPayload) {
+    await this.handleLogin();
+
+    const url = `${this.url}${this.CLIENTS_PATH}/update/${encodeURIComponent(email)}`;
+    const body = JSON.stringify(client);
+    const req = Util.newPostRequest(url, this.headers, body);
+
+    const res = await fetch(req);
+    return res;
   }
 
   async addClientToInbound(inboundID: number, email: string, UUID: string) {
@@ -202,7 +252,11 @@ export class Panel {
 
     try {
       const res = await fetch(req);
-      const body = (await res.json()) as UUIDResponse;
+      const body = (await res.json()) as
+        | UUIDResponse
+        | { success: boolean; msg: string; obj: string };
+      // New API: { obj: "<uuid-string>" }; old API: { obj: { uuid } }.
+      if (typeof body.obj === "string") return body.obj;
       return body.obj.uuid;
     } catch (error) {
       console.error(error);

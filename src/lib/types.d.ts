@@ -35,6 +35,68 @@ interface UUIDResponse {
   };
 }
 
+/// New 3X-UI client-centric API (/panel/api/clients/*)
+interface PanelClientTraffic {
+  up: number;
+  down: number;
+  enable: boolean;
+}
+
+interface PanelClient {
+  id: number;
+  email: string;
+  subId?: string;
+  uuid?: string;
+  password?: string;
+  totalGB: number;
+  expiryTime: number;
+  enable: boolean;
+  tgId?: number | string;
+  comment?: string;
+  limitIp?: number;
+  reset?: number;
+  flow?: string;
+  auth?: string;
+  security?: string;
+  reverse?: unknown;
+  groupName?: string;
+  createdAt?: number;
+  updatedAt?: number;
+  inboundIds: number[];
+  traffic?: PanelClientTraffic;
+  up?: number;
+  down?: number;
+}
+
+interface GetClientsResponse {
+  success: boolean;
+  msg: string;
+  obj: PanelClient[];
+}
+
+interface GetClientResponse {
+  success: boolean;
+  msg: string;
+  obj: PanelClient;
+}
+
+interface NewPanelClient {
+  email: string;
+  uuid?: string;
+  totalGB: number;
+  expiryTime: number;
+  enable: boolean;
+  tgId?: number | string;
+  comment?: string;
+  limitIp?: number;
+  subId?: string;
+  flow?: string;
+}
+
+interface PanelClientPayload extends NewPanelClient {
+  email: string;
+}
+
 interface UserConfig {
   email: string;
   inboundID: number;
