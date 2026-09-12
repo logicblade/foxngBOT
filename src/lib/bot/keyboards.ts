@@ -14,6 +14,7 @@ import {
   changeSellStateBtn,
   getConfigBtn,
   backupBtn,
+  broadcastBtn,
 } from "./messages";
 import { PLANS } from "./plans";
 
@@ -59,5 +60,14 @@ export const adminMenu = new Keyboard()
   .text(changeRenewStateBtn)
   .text(changeSellStateBtn)
   .row()
+  .text(broadcastBtn)
+  .row()
   .text(backupBtn)
   .resized();
+
+export const broadcastConfirmMenu = (pendingCount: number) =>
+  new Keyboard()
+    .text(`تایید ارسال به ${pendingCount} کاربر ✅`)
+    .row()
+    .text(resetBtn)
+    .resized();

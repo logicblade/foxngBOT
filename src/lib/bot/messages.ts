@@ -83,11 +83,11 @@ export const reciptReceiveTxt = `
 
 // New 5-tier plans. Single source of truth lives in ./plans (PLANS).
 // Kept as deprecated aliases so old imports don't break.
-export const oneM10G = "اشتراک 1 ماهه 10 گیگابایت - 150 هزار تومان";
-export const oneM20G = "اشتراک 1 ماهه 20 گیگابایت - 300 هزار تومان";
-export const oneM30G = "اشتراک 1 ماهه 30 گیگابایت - 450 هزار تومان";
-export const oneM50G = "اشتراک 1 ماهه 50 گیگابایت - 750 هزار تومان";
-export const oneM100G = "اشتراک 1 ماهه 100 گیگابایت - 1500 هزار تومان";
+export const oneM10G = "زمان نامحدود 10 گیگابایت - 150 هزار تومان";
+export const oneM20G = "زمان نامحدود 20 گیگابایت - 300 هزار تومان";
+export const oneM30G = "زمان نامحدود 30 گیگابایت - 450 هزار تومان";
+export const oneM50G = "زمان نامحدود 50 گیگابایت - 750 هزار تومان";
+export const oneM100G = "زمان نامحدود 100 گیگابایت - 1,500 هزار تومان";
 
 export const justImageTxt = `
 شرمنده فقط عکس قبوله!
@@ -105,6 +105,7 @@ export const appStateBtn = "وضعیت خرید و تمدید";
 export const changeSellStateBtn = "تغییر وضعیت خرید";
 export const changeRenewStateBtn = "تغییر وضعیت تمدید";
 export const backupBtn = "بکاپ گرفتن از دیتابیس";
+export const broadcastBtn = "📣 پیام همگانی";
 
 export const welcomeAdminTxt = `
 خوش اومدی!
