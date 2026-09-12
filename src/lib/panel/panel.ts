@@ -341,9 +341,24 @@ export class Panel {
 
     const url = `${this.url}${this.LOGIN_PATH}`;
 
-    const res = await fetch(
+    // Newer 3x-ui enforces CSRF on cookie auth: fetch a CSRF token first,
+    // retry login with the X-CSRF-Token header if the first attempt is
+    // rejected with 403.
+    await this.refreshCsrfToken();
+
+    let res = await fetch(
       Util.newPostRequest(url, this.headers, JSON.stringify(user)),
     );
+    if (res.status === 403) {
+      const snippet = (await res.text().catch(() => "")).slice(0, 500);
+      console.error(
+        `Login 403 for ${this.name} (retrying with fresh CSRF token). Body: ${snippet}`,
+      );
+      await this.refreshCsrfToken();
+      res = await fetch(
+        Util.newPostRequest(url, this.headers, JSON.stringify(user)),
+      );
+    }
     if (res.status !== 200) {
       const snippet = (await res.text().catch(() => "")).slice(0, 500);
       console.error(
@@ -353,12 +368,7 @@ export class Panel {
     }
 
     // Bun may fold multiple Set-Cookie headers into one comma-joined value.
-    const setCookieHeader =
-      res.headers.get("Set-Cookie") ?? res.headers.get("set-cookie");
-    const cookies = setCookieHeader ? setCookieHeader.split(/,(?=[^;,]+=[^;,]*;)/) : [];
-    const sessionCookie = cookies
-      .map((c) => c.trim().split(";")[0]?.trim() ?? "")
-      .find((c) => c.startsWith("3x-ui=") && c.length > "3x-ui=".length);
+    const sessionCookie = this.extractSessionCookie(res.headers);
     if (sessionCookie) {
       this.headers.set("Cookie", sessionCookie);
       return "okay";
@@ -369,6 +379,42 @@ export class Panel {
       `Login for ${this.name} returned 200 but no 3x-ui session cookie. Body: ${bodySnippet}`,
     );
     return "error";
+  }
+
+  private async refreshCsrfToken() {
+    try {
+      const res = await fetch(
+        Util.newGetRequest(`${this.url}/csrf-token`, this.headers),
+      );
+      if (!res.ok) return;
+      const body = (await res.json().catch(() => null)) as {
+        success?: boolean;
+        obj?: string;
+      } | null;
+      const token = typeof body?.obj === "string" ? body.obj : undefined;
+      if (token) this.headers.set("X-CSRF-Token", token);
+      this.extractSessionCookie(res.headers, true);
+    } catch {
+      // CSRF endpoint may not exist on older panels — login still works.
+    }
+  }
+
+  private extractSessionCookie(headers: Headers, persist = false): string | undefined {
+    const setCookieHeader =
+      headers.get("Set-Cookie") ?? headers.get("set-cookie");
+    if (!setCookieHeader) return undefined;
+    // Bun folds multiple Set-Cookie headers into one comma-joined value.
+    // Splitting on commas is unsafe (Expires=... contains commas), so also
+    // try parsing the whole value as a single cookie.
+    const candidates = [
+      setCookieHeader,
+      ...setCookieHeader.split(/,(?=[^;,]+=[^;,]*;)/),
+    ];
+    const sessionCookie = candidates
+      .map((c) => c.trim().split(";")[0]?.trim() ?? "")
+      .find((c) => c.startsWith("3x-ui=") && c.length > "3x-ui=".length);
+    if (sessionCookie && persist) this.headers.set("Cookie", sessionCookie);
+    return sessionCookie;
   }
 
   private async isStatusSuccess() {
