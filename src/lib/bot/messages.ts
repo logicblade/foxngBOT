@@ -73,38 +73,21 @@ export const statusOffTxt = `
 
 🆔: @foxngsup
 `;
-export const renewTxt250 = `
-💵هزینه تمدید اشتراک شما: 
-  ✅250 هزار تومان
-
-💳شایان براقی - توسعه تعاون💳
-
-<blockquote><code>5029081059314381</code></blockquote>
-🚨(برای کپی کردن شماره کارت روی آن کلیک کنید)
-
-
-⚠️توجه⚠️
-‼️عکس رسید تراکنش خود را همینجا بفرستید تا اشتراک شما به صورت خودکار فعال شود‼️
-`;
-export const renewTxt450 = `
-💵هزینه تمدید اشتراک شما: 
-  ✅450 هزار تومان
-
-💳شایان براقی - توسعه تعاون💳
-
-<blockquote><code>5029081059314381</code></blockquote>
-🚨(برای کپی کردن شماره کارت روی آن کلیک کنید)
-
-
-⚠️توجه⚠️
-‼️عکس رسید تراکنش خود را همینجا بفرستید تا اشتراک شما به صورت خودکار فعال شود‼️
-`;
+// Deprecated: payment texts are now generated via paymentText() in ./plans.
+export const renewTxt250 = ``;
+export const renewTxt450 = ``;
 export const reciptReceiveTxt = `
 با تشکر | رسید شما دریافت شد ✅
 بعد از بررسی ادمین تا چند لحظه دیگه اشتراک شما فعال و از همین ربات بهتون اطلاع میدیم…❤️
 `;
-export const oneM40G = "اشتراک 1 ماهه 40 گیگابایت - 250 هزار تومان";
-export const oneM80G = "اشتراک 1 ماهه 80 گیگابایت - 450 هزار تومان";
+
+// New 5-tier plans. Single source of truth lives in ./plans (PLANS).
+// Kept as deprecated aliases so old imports don't break.
+export const oneM10G = "اشتراک 1 ماهه 10 گیگابایت - 150 هزار تومان";
+export const oneM20G = "اشتراک 1 ماهه 20 گیگابایت - 300 هزار تومان";
+export const oneM30G = "اشتراک 1 ماهه 30 گیگابایت - 450 هزار تومان";
+export const oneM50G = "اشتراک 1 ماهه 50 گیگابایت - 750 هزار تومان";
+export const oneM100G = "اشتراک 1 ماهه 100 گیگابایت - 1500 هزار تومان";
 
 export const justImageTxt = `
 شرمنده فقط عکس قبوله!
@@ -131,29 +114,6 @@ export const welcomeAdminTxt = `
 کارو با اضافه کردن پنل شروع کن!
 `;
 
-export const buyTxt250 = `
-💵هزینه خرید اشتراک شما: 
-  ✅250 هزار تومان
-
-💳شایان براقی - توسعه تعاون💳
-
-<blockquote><code>5029081059314381</code></blockquote>
-🚨(برای کپی کردن شماره کارت روی آن کلیک کنید)
-
-
-⚠️توجه⚠️
-‼️عکس رسید تراکنش خود را همینجا بفرستید تا اشتراک شما به صورت خودکار فعال شود‼️
-`;
-export const buyTxt450 = `
-💵هزینه خرید اشتراک شما: 
-  ✅450 هزار تومان
-
-💳شایان براقی - توسعه تعاون💳
-
-<blockquote><code>5029081059314381</code></blockquote>
-🚨(برای کپی کردن شماره کارت روی آن کلیک کنید)
-
-
-⚠️توجه⚠️
-‼️عکس رسید تراکنش خود را همینجا بفرستید تا اشتراک شما به صورت خودکار فعال شود‼️
-`;
+// Deprecated: payment texts are now generated via paymentText() in ./plans.
+export const buyTxt250 = ``;
+export const buyTxt450 = ``;

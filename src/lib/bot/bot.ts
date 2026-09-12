@@ -40,14 +40,8 @@ import {
   mySubBtn,
   cancelBtn,
   greet,
-  oneM40G,
-  oneM80G,
-  renewTxt250,
-  renewTxt450,
   resetBtn,
   contactTxt,
-  buyTxt250,
-  buyTxt450,
   disableSellTxt,
   disableRenewTxt,
   appStateBtn,
@@ -56,6 +50,7 @@ import {
   getConfigBtn,
   backupBtn,
 } from "./messages";
+import { PLANS, getPlan, paymentText } from "./plans";
 import {
   type ConversationFlavor,
   conversations,
@@ -157,47 +152,6 @@ export class TelBot {
           });
           break;
 
-        case oneM40G:
-          if (pendingConfig.has(ctx.from.id)) {
-            pendingConfigType.set(ctx.from.id, "250");
-            waitingForRenewImage.add(userID);
-
-            await ctx.reply(renewTxt250, {
-              parse_mode: "HTML",
-              reply_markup: new Keyboard().text(cancelBtn).resized(),
-            });
-          } else if (pendingCreateConfig.has(ctx.from.id)) {
-            pendingCreateConfigType.set(ctx.from.id, "250");
-            waitingForCreateImage.add(userID);
-            console.log("added create image id");
-
-            await ctx.reply(buyTxt250, {
-              parse_mode: "HTML",
-              reply_markup: new Keyboard().text(cancelBtn).resized(),
-            });
-          }
-          break;
-
-        case oneM80G:
-          if (pendingConfig.has(ctx.from.id)) {
-            pendingConfigType.set(ctx.from.id, "450");
-            waitingForRenewImage.add(userID);
-
-            await ctx.reply(renewTxt450, {
-              parse_mode: "HTML",
-              reply_markup: new Keyboard().text(cancelBtn).resized(),
-            });
-          } else if (pendingCreateConfig.has(ctx.from.id)) {
-            pendingCreateConfigType.set(ctx.from.id, "450");
-            waitingForCreateImage.add(userID);
-
-            await ctx.reply(buyTxt450, {
-              parse_mode: "HTML",
-              reply_markup: new Keyboard().text(cancelBtn).resized(),
-            });
-          }
-          break;
-
         case myPanelsBtn:
           if (userID !== ADMIN_ID) {
             await ctx.reply("این حرفا رو از کجا یاد گرفتی؟؟", {
@@ -276,8 +230,27 @@ export class TelBot {
           await handleBackup(ctx);
           break;
 
-        default:
+        default: {
+          const plan = PLANS.find((p) => p.buttonText === ctx.message.text);
+          if (!plan) break;
+          const replyOpts = {
+            parse_mode: "HTML" as const,
+            reply_markup: new Keyboard().text(cancelBtn).resized(),
+          };
+          if (pendingConfig.has(ctx.from.id)) {
+            pendingConfigType.set(ctx.from.id, plan.id);
+            waitingForRenewImage.add(userID);
+
+            await ctx.reply(paymentText("renew", plan), replyOpts);
+          } else if (pendingCreateConfig.has(ctx.from.id)) {
+            pendingCreateConfigType.set(ctx.from.id, plan.id);
+            waitingForCreateImage.add(userID);
+            console.log("added create image id");
+
+            await ctx.reply(paymentText("buy", plan), replyOpts);
+          }
           break;
+        }
       }
     });
 
@@ -307,19 +280,20 @@ export class TelBot {
           const email = creatingEmail.get(userId)!;
 
           const type = pendingCreateConfigType.get(userId)!;
+          const plan = getPlan(type)!;
 
           pendingCreates.delete(userId);
           pendingCreateConfig.delete(userId);
           pendingCreateConfigType.delete(userId);
 
-          const quotaGB = type === "450" ? 65 : 30;
+          // Granted quota comes from the plan table (title GB vs granted GB).
           const newClient: NewPanelClient = {
             email,
             uuid: uuid ?? undefined,
             flow: "",
             limitIp: 0,
-            totalGB: Util.gigsToBytes(quotaGB),
-            expiryTime: Date.now() + Util.getUnixTimeOf({ days: 30 }),
+            totalGB: Util.gigsToBytes(plan.grantGB),
+            expiryTime: Date.now() + Util.getUnixTimeOf({ days: plan.durationDays }),
             enable: true,
             tgId: userId,
             comment: String(userId),
@@ -390,10 +364,10 @@ export class TelBot {
       }
 
       // New API replaces the whole client row: fetch current row first,
-      // then extend expiry (+30d from max(now, current)) and quota.
+      // then extend expiry (+duration from max(now, current)) and add quota.
       const current = await panel.getClientByEmail(email);
       const currentObj = current?.obj;
-      const quotaGB = type === "450" ? 65 : 30;
+      const plan = getPlan(type)!;
       const baseExpiry = Math.max(Date.now(), currentObj?.expiryTime ?? 0);
       const updatedClient: PanelClientPayload = {
         email,
@@ -401,8 +375,8 @@ export class TelBot {
         flow: "",
         limitIp: currentObj?.limitIp ?? 0,
         totalGB:
-          (currentObj?.totalGB ?? 0) + Util.gigsToBytes(quotaGB),
-        expiryTime: baseExpiry + Util.getUnixTimeOf({ days: 30 }),
+          (currentObj?.totalGB ?? 0) + Util.gigsToBytes(plan.grantGB),
+        expiryTime: baseExpiry + Util.getUnixTimeOf({ days: plan.durationDays }),
         enable: true,
         tgId: userId,
         comment: String(userId),

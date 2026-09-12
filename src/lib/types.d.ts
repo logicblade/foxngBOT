@@ -12,7 +12,7 @@ interface Credential {
   password: string;
 }
 
-type ConfigPrice = "250" | "450";
+type ConfigPrice = "10g" | "20g" | "30g" | "50g" | "100g";
 
 interface PendingRenewConfig {
   UUID: string;
