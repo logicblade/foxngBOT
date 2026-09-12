@@ -7,6 +7,8 @@ import {
   getConfigCache,
   getConfigsPanel,
   handleBackup,
+  handleBroadcastConfirm,
+  handleBroadcastMessage,
   handleCheckAccount,
   handleCreateAccount,
   handleCreateDeclineCallback,
@@ -17,6 +19,7 @@ import {
   handleRenewDeclineCallback,
   handleStartCommandForAdmin,
   handleStartCommandForUser,
+  pendingBroadcast,
   pendingConfig,
   pendingConfigType,
   pendingCreateConfig,
@@ -27,6 +30,7 @@ import {
   renewCache,
   showPanelsListToAdmin,
   state,
+  waitingForBroadcast,
   waitingForCreateImage,
   waitingForRenewImage,
 } from "./helpers";
@@ -49,14 +53,14 @@ import {
   changeRenewStateBtn,
   getConfigBtn,
   backupBtn,
+  broadcastBtn,
 } from "./messages";
+import { adminMenu, mainMenu } from "./keyboards";
 import { PLANS, getPlan, paymentText } from "./plans";
-import {
-  type ConversationFlavor,
+import { type ConversationFlavor,
   conversations,
   createConversation,
 } from "@grammyjs/conversations";
-import { mainMenu } from "./keyboards";
 import { Util } from "../../util/util";
 import { getAllPanels } from "../panel/panel";
 import { WHICH_INBOUND, WHICH_PANEL } from "../..";
@@ -83,11 +87,18 @@ export class TelBot {
 
     this.bot.on("message", async (ctx) => {
       const userID = ctx.from.id;
+      db.upsertUser(userID);
       if (
         waitingForRenewImage.has(userID) ||
         waitingForCreateImage.has(userID)
       ) {
         await handleImagesIncome(ctx);
+      }
+      if (userID === ADMIN_ID) {
+        if (await handleBroadcastMessage(ctx, db)) return;
+        if (pendingBroadcast.has(userID)) {
+          if (await handleBroadcastConfirm(ctx, db)) return;
+        }
       }
       if (!ctx.message?.text) return;
 
@@ -146,6 +157,9 @@ export class TelBot {
           pendingCreates.delete(userID);
           pendingCreateConfig.delete(userID);
           pendingCreateConfigType.delete(userID);
+
+          waitingForBroadcast.delete(userID);
+          pendingBroadcast.delete(userID);
 
           await ctx.reply(greet, {
             reply_markup: mainMenu,
@@ -228,6 +242,21 @@ export class TelBot {
             break;
           }
           await handleBackup(ctx);
+          break;
+
+        case broadcastBtn:
+          if (userID !== ADMIN_ID) {
+            await ctx.reply("این حرفا رو از کجا یاد گرفتی؟؟", {
+              reply_markup: mainMenu,
+            });
+            break;
+          }
+          pendingBroadcast.delete(userID);
+          waitingForBroadcast.add(userID);
+          await ctx.reply(
+            "متن یا عکسی که میخوای برای همه کاربرا بفرستم رو همینجا بفرست.\n\nاگه پشیمون شدی بنویس «بیخیال».",
+            { reply_markup: adminMenu },
+          );
           break;
 
         default: {
