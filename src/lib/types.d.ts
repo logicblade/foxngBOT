@@ -221,6 +221,17 @@ interface StreamSettings {
       };
     };
   };
+  wsSettings?: {
+    acceptProxyProtocol?: boolean;
+    path?: string;
+    /** Newer xray panels put the Host here directly. */
+    host?: string;
+    /** Older ones keep it in headers.Host. */
+    headers?: {
+      Host?: string;
+      [key: string]: string | undefined;
+    };
+  };
   realitySettings?: {
     show?: boolean;
     dest?: string;

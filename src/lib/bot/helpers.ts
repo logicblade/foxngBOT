@@ -556,6 +556,12 @@ export async function genConfig(
   const tcpHeader = streamSettings.tcpSettings?.header;
   const tcpRequest = tcpHeader?.request;
 
+  // WebSocket transport keeps host/path in wsSettings (host field or
+  // headers.Host on older panels). Client apps need both to connect.
+  const ws = streamSettings.wsSettings;
+  const wsHost = ws?.host || ws?.headers?.Host || ws?.headers?.host || undefined;
+  const wsPath = ws?.path || undefined;
+
   let configLink = "";
   if (inbound.obj.protocol === "vmess") {
     configLink = generateVmessLink({
@@ -564,8 +570,18 @@ export async function genConfig(
       port: inbound.obj.port,
       uuid: uuid,
       network: streamSettings.network,
-      host: tcpRequest ? tcpRequest.headers.Host.at(0) : undefined,
-      path: tcpRequest ? tcpRequest.path.at(0) : undefined,
+      host:
+        streamSettings.network === "ws"
+          ? wsHost
+          : tcpRequest
+            ? tcpRequest.headers.Host.at(0)
+            : undefined,
+      path:
+        streamSettings.network === "ws"
+          ? wsPath
+          : tcpRequest
+            ? tcpRequest.path.at(0)
+            : undefined,
       header: tcpHeader?.type ?? "none",
     });
   } else if (inbound.obj.protocol === "vless") {
@@ -574,7 +590,10 @@ export async function genConfig(
     const params = new URLSearchParams();
     params.set("type", streamSettings.network);
     params.set("encryption", inbound.obj.settings.encryption || "none");
-    if (tcpRequest) {
+    if (streamSettings.network === "ws") {
+      if (wsHost) params.set("host", wsHost);
+      if (wsPath) params.set("path", wsPath);
+    } else if (tcpRequest) {
       const p = tcpRequest.path.at(0);
       const h = tcpRequest.headers.Host.at(0);
       if (p) params.set("path", p);
@@ -600,7 +619,7 @@ export async function genConfig(
       if (mode) params.set("mode", mode);
     }
 
-    configLink = `vless://${uuid}@${url}:${inbound.obj.port}?${params.toString()}#${inbound.obj.remark}-${email}`;
+    configLink = `vless://${uuid}@${url}:${inbound.obj.port}?${params.toString()}#${encodeURIComponent(`${inbound.obj.remark}-${email}`)}`;
   }
 
   const qrBuffer = await QRCode.toBuffer(configLink, {
