@@ -97,6 +97,15 @@ interface PanelClientPayload extends NewPanelClient {
   email: string;
 }
 
+/** Result of adding a client, carrying the panel-confirmed credential. */
+interface AddClientResult {
+  ok: boolean;
+  /** The uuid/vless-id actually stored by the panel (source of truth). */
+  uuid?: string;
+  status?: number;
+  body?: string;
+}
+
 interface UserConfig {
   email: string;
   inboundID: number;

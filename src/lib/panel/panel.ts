@@ -178,7 +178,15 @@ export class Panel {
     }
   }
 
-  async addClient(inboundID: number, client: NewPanelClient) {
+  /**
+   * Adds a client and returns the credential the panel ACTUALLY stored.
+   * The panel owns the uuid/vless-id: after a successful add we re-read the
+   * row and use its uuid for config links — never the value we requested.
+   */
+  async addClient(
+    inboundID: number,
+    client: NewPanelClient,
+  ): Promise<AddClientResult> {
     await this.handleLogin();
 
     const url = `${this.url}${this.CLIENTS_PATH}/add`;
@@ -186,7 +194,40 @@ export class Panel {
     const req = Util.newPostRequest(url, this.headers, body);
 
     const res = await fetch(req);
-    return res;
+    const text = await res.text().catch(() => "");
+
+    if (res.status !== 200 || !text.includes("true")) {
+      return { ok: false, status: res.status, body: text.slice(0, 500) };
+    }
+
+    // Re-read the stored row (source of truth). Some panel versions return
+    // obj as a single object, others as a one-element array — accept both.
+    try {
+      const stored = await this.getClientByEmail(client.email);
+      const row = Array.isArray(stored?.obj) ? stored.obj[0] : stored?.obj;
+      const uuid = row?.uuid;
+      if (uuid) {
+        if (client.uuid && uuid !== client.uuid) {
+          console.warn(
+            `addClient: panel stored a different uuid than requested for ${client.email} (requested=${client.uuid}, stored=${uuid})`,
+          );
+        }
+        return { ok: true, uuid };
+      }
+    } catch (error) {
+      console.error("addClient: verification read failed:", error);
+    }
+
+    // Could not confirm what the panel stored. Only fall back to the
+    // requested uuid if there is one; otherwise treat as failure so we
+    // never send the user a config link with a wrong/placeholder id.
+    if (client.uuid) {
+      console.error(
+        `addClient: could not verify stored uuid for ${client.email}, falling back to requested uuid`,
+      );
+      return { ok: true, uuid: client.uuid };
+    }
+    return { ok: false, status: res.status, body: text.slice(0, 500) };
   }
 
   async updateClient(email: string, client: PanelClientPayload) {

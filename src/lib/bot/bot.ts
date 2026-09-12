@@ -348,39 +348,39 @@ export class TelBot {
 
         creatingEmail.delete(userId);
 
-        let res: Response;
+        let added: AddClientResult;
         try {
-          res = await panel.addClient(Number(WHICH_INBOUND), newClient);
+          added = await panel.addClient(Number(WHICH_INBOUND), newClient);
         } catch (error) {
           console.error("createAccept: addClient threw:", error);
           return await ctx.reply("خطا در ارتباط با پنل!");
         }
 
-        const responseBody = await res.text().catch(() => "");
-
-        if (res.status === 200 && responseBody?.includes("true")) {
-          let qrFile: InputFile;
-          let configLink: string;
-          try {
-            ({ qrFile, configLink } = await genConfig(panel, email, uuid));
-          } catch (error) {
-            console.error("createAccept: genConfig threw:", error);
-            await ctx.api.sendMessage(
-              userId,
-              "اشتراک شما ساخته شد ولی ساخت لینک کانفیگ خطا خورد. به پشتیبانی پیام بده 👇\n\n🆔: @foxngsup",
-            );
-            return await ctx.reply("ساخته شد ولی لینک خطا خورد ❌");
-          }
-          await ctx.api.sendPhoto(userId, qrFile, {
-            caption: `اشتراک شما با موفقیت فعال شد ✅\n\nلینک کانفیگ شما 👇\n(برای کپی کردن لینک یک بار روی آن کلیک کنید.)\n\n<code>${configLink}</code>\n\nاگه بلد نیستی از لینک استفاده کنی از دکمه\n"⚙️ آموزش اتصال به کانفیگ" استفاده کن`,
-            parse_mode: "HTML",
-          });
-          await ctx.reply("تایید شد ✅");
-          await ctx.answerCallbackQuery();
-        } else {
-          console.log(res.status, responseBody);
-          await ctx.answerCallbackQuery({ text: "خطا در ساخت اشتراک!" });
+        if (!added.ok || !added.uuid) {
+          console.error(
+            `createAccept: addClient failed status=${added.status} body=${added.body}`,
+          );
+          return await ctx.reply("خطا در ساخت اشتراک!");
         }
+
+        // The panel's stored uuid is the source of truth for the config link.
+        let qrFile: InputFile;
+        let configLink: string;
+        try {
+          ({ qrFile, configLink } = await genConfig(panel, email, added.uuid));
+        } catch (error) {
+          console.error("createAccept: genConfig threw:", error);
+          await ctx.api.sendMessage(
+            userId,
+            "اشتراک شما ساخته شد ولی ساخت لینک کانفیگ خطا خورد. به پشتیبانی پیام بده 👇\n\n🆔: @foxngsup",
+          );
+          return await ctx.reply("ساخته شد ولی لینک خطا خورد ❌");
+        }
+        await ctx.api.sendPhoto(userId, qrFile, {
+          caption: `اشتراک شما با موفقیت فعال شد ✅\n\nلینک کانفیگ شما 👇\n(برای کپی کردن لینک یک بار روی آن کلیک کنید.)\n\n<code>${configLink}</code>\n\nاگه بلد نیستی از لینک استفاده کنی از دکمه\n"⚙️ آموزش اتصال به کانفیگ" استفاده کن`,
+          parse_mode: "HTML",
+        });
+        await ctx.reply("تایید شد ✅");
       } catch (error) {
         console.error("createAccept handler threw:", error);
         try {
