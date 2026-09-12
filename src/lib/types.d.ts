@@ -12,7 +12,7 @@ interface Credential {
   password: string;
 }
 
-type ConfigPrice = "250" | "450";
+type ConfigPrice = "10g" | "20g" | "30g" | "50g" | "100g";
 
 interface PendingRenewConfig {
   UUID: string;
@@ -33,6 +33,77 @@ interface UUIDResponse {
   obj: {
     uuid: UUID;
   };
+}
+
+/// New 3X-UI client-centric API (/panel/api/clients/*)
+interface PanelClientTraffic {
+  up: number;
+  down: number;
+  enable: boolean;
+}
+
+interface PanelClient {
+  id: number;
+  email: string;
+  subId?: string;
+  uuid?: string;
+  password?: string;
+  totalGB: number;
+  expiryTime: number;
+  enable: boolean;
+  tgId?: number | string;
+  comment?: string;
+  limitIp?: number;
+  reset?: number;
+  flow?: string;
+  auth?: string;
+  security?: string;
+  reverse?: unknown;
+  groupName?: string;
+  createdAt?: number;
+  updatedAt?: number;
+  inboundIds: number[];
+  traffic?: PanelClientTraffic;
+  up?: number;
+  down?: number;
+}
+
+interface GetClientsResponse {
+  success: boolean;
+  msg: string;
+  obj: PanelClient[];
+}
+
+interface GetClientResponse {
+  success: boolean;
+  msg: string;
+  obj: PanelClient;
+}
+
+interface NewPanelClient {
+  email: string;
+  uuid?: string;
+  totalGB: number;
+  expiryTime: number;
+  enable: boolean;
+  tgId?: number | string;
+  comment?: string;
+  limitIp?: number;
+  subId?: string;
+  flow?: string;
+}
+
+interface PanelClientPayload extends NewPanelClient {
+  email: string;
+}
+
+/** Result of adding a client, carrying the panel-confirmed credential. */
+interface AddClientResult {
+  ok: boolean;
+  /** The uuid/vless-id actually stored by the panel (source of truth). */
+  uuid?: string;
+  status?: number;
+  body?: string;
 }
 
 interface UserConfig {
@@ -129,12 +200,12 @@ interface Client {
 interface StreamSettings {
   network: string;
   security: string;
-  externalProxy: ExternalProxy[];
-  tcpSettings: {
+  externalProxy?: ExternalProxy[];
+  tcpSettings?: {
     acceptProxyProtocol: boolean;
     header: {
       type: string;
-      request: {
+      request?: {
         version: string;
         method: string;
         path: string[];
@@ -142,7 +213,7 @@ interface StreamSettings {
           Host: string[];
         };
       };
-      response: {
+      response?: {
         version: string;
         status: string;
         reason: string;
@@ -150,7 +221,34 @@ interface StreamSettings {
       };
     };
   };
-  kcpSettings: KcpSettings;
+  wsSettings?: {
+    acceptProxyProtocol?: boolean;
+    path?: string;
+    /** Newer xray panels put the Host here directly. */
+    host?: string;
+    /** Older ones keep it in headers.Host. */
+    headers?: {
+      Host?: string;
+      [key: string]: string | undefined;
+    };
+  };
+  realitySettings?: {
+    show?: boolean;
+    dest?: string;
+    xver?: number;
+    serverNames?: string[];
+    privateKey?: string;
+    publicKey?: string;
+    shortIds?: string[];
+    fingerprint?: string;
+    spiderX?: string;
+  };
+  xhttpSettings?: {
+    path?: string;
+    host?: string;
+    mode?: string;
+  };
+  kcpSettings?: KcpSettings;
 }
 
 interface ExternalProxy {

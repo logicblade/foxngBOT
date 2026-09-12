@@ -12,8 +12,11 @@ import {
   subFoundGetConfTxt,
   subFoundTxt,
   welcomeAdminTxt,
+  resetBtn,
+  cancelBtn,
+  broadcastBtn,
 } from "./messages";
-import { adminMenu, mainMenu, renewMenu } from "./keyboards";
+import { adminMenu, broadcastConfirmMenu, mainMenu, renewMenu } from "./keyboards";
 import type { DB } from "../../util/db";
 import type { Conversation } from "@grammyjs/conversations";
 import { db, WHICH_INBOUND } from "../..";
@@ -34,6 +37,12 @@ export const waitingForCreateImage = new Set<number>();
 export const pendingCreates = new Map<number, { photoFileID: string }>();
 export const pendingCreateConfig = new Set<number>();
 export const pendingCreateConfigType = new Map<number, ConfigPrice>();
+
+export const waitingForBroadcast = new Set<number>();
+export const pendingBroadcast = new Map<
+  number,
+  { text?: string; photoFileID?: string; caption?: string }
+>();
 
 export const state: State = {
   isRenewActive: true,
@@ -325,7 +334,7 @@ export async function handleCheckAccount(ctx: Context, db: DB) {
 
     for (const conf of configs) {
       const email = Util.removeEmoji(conf.email);
-      statusTxt += `${conf.status ? (conf.isRenewable ? "🟡" : "🟢") : "🔴"} ${email} - ${conf.status ? (conf.isRenewable ? "نزدیک انقضا" : "فعال") : "به اتمام رسیده"}\n`;
+      statusTxt += `${conf.status ? (conf.isRenewable ? "🟡" : "🟢") : "🔴"} ${email} - ${conf.status ? (conf.isRenewable ? "رو به اتمام" : "فعال") : "به اتمام رسیده"}\n`;
     }
 
     await ctx.reply(statusTxt, { reply_markup: mainMenu });
@@ -443,12 +452,26 @@ export async function removePanelConv(
 export async function getConfigsPanel(uuid: string, db: DB) {
   const panels = getAllPanels(db);
 
+  // uuid here may be a client UUID (vless/vmess id) or the raw email key.
+  // Prefer the client-centric lookup, fall back to scanning inbounds.
   for (const panel of panels) {
+    const clients = await panel.getClients();
+    if (clients?.success && Array.isArray(clients.obj)) {
+      const found = clients.obj.find(
+        (c) => c.uuid === uuid || c.email === uuid,
+      );
+      if (found) return panel;
+    }
     const inbounds = await panel.getInbounds();
     if (inbounds) {
       for (const bound of inbounds.obj) {
         for (const client of bound.clientStats) {
           if (client.uuid === uuid) {
+            return panel;
+          }
+        }
+        for (const client of bound.settings.clients) {
+          if (client.id === uuid || client.email === uuid) {
             return panel;
           }
         }
@@ -510,13 +533,34 @@ export async function genConfig(
     inboundID ? inboundID : Number(WHICH_INBOUND),
   );
 
+  const streamSettings = inbound.obj.streamSettings as StreamSettings & {
+    externalProxy?: ExternalProxy[];
+    realitySettings?: {
+      dest?: string;
+      serverNames?: string[];
+      shortIds?: string[];
+      publicKey?: string;
+      fingerprint?: string;
+      spiderX?: string;
+    };
+    xhttpSettings?: { path?: string; host?: string; mode?: string };
+  };
+  const proxies = streamSettings.externalProxy ?? [];
   const useExternalProxy =
-    inbound.obj.streamSettings.externalProxy.length !== 0
-      ? inbound?.obj.streamSettings.externalProxy.at(0)?.dest !== ""
-      : false;
+    proxies.length !== 0 ? proxies.at(0)?.dest !== "" : false;
   const externalProxy = useExternalProxy
-    ? inbound?.obj.streamSettings.externalProxy.at(0)?.dest
+    ? proxies.at(0)?.dest
     : undefined;
+
+  // TCP-only settings are absent on reality/grpc/xhttp inbounds — guard them.
+  const tcpHeader = streamSettings.tcpSettings?.header;
+  const tcpRequest = tcpHeader?.request;
+
+  // WebSocket transport keeps host/path in wsSettings (host field or
+  // headers.Host on older panels). Client apps need both to connect.
+  const ws = streamSettings.wsSettings;
+  const wsHost = ws?.host || ws?.headers?.Host || ws?.headers?.host || undefined;
+  const wsPath = ws?.path || undefined;
 
   let configLink = "";
   if (inbound.obj.protocol === "vmess") {
@@ -525,33 +569,57 @@ export async function genConfig(
       server: useExternalProxy ? externalProxy! : new URL(panel.url).hostname,
       port: inbound.obj.port,
       uuid: uuid,
-      network: inbound.obj.streamSettings.network,
-      host: inbound.obj.streamSettings.tcpSettings.header.request
-        ? inbound.obj.streamSettings.tcpSettings.header.request.headers.Host.at(
-            0,
-          )
-        : undefined,
-      path: inbound.obj.streamSettings.tcpSettings.header.request
-        ? inbound.obj.streamSettings.tcpSettings.header.request.path.at(0)
-        : undefined,
-      header: inbound.obj.streamSettings.tcpSettings.header.type,
+      network: streamSettings.network,
+      host:
+        streamSettings.network === "ws"
+          ? wsHost
+          : tcpRequest
+            ? tcpRequest.headers.Host.at(0)
+            : undefined,
+      path:
+        streamSettings.network === "ws"
+          ? wsPath
+          : tcpRequest
+            ? tcpRequest.path.at(0)
+            : undefined,
+      header: tcpHeader?.type ?? "none",
     });
   } else if (inbound.obj.protocol === "vless") {
     const url = useExternalProxy ? externalProxy! : new URL(panel.url).hostname;
 
-    configLink = `vless://${uuid}@${url}:${inbound.obj.port}?type=${inbound.obj.streamSettings.network}&encryption=${inbound.obj.settings.encryption || "none"}${
-      inbound.obj.streamSettings.tcpSettings.header.request
-        ? `&path=${encodeURIComponent(
-            inbound.obj.streamSettings.tcpSettings.header.request.path.at(0)!,
-          )}`
-        : ""
-    }${
-      inbound.obj.streamSettings.tcpSettings.header.request
-        ? `&host=${inbound.obj.streamSettings.tcpSettings.header.request.headers.Host.at(
-            0,
-          )}`
-        : ""
-    }&headerType=${inbound.obj.streamSettings.tcpSettings.header.type}&security=${inbound.obj.streamSettings.security}#${inbound.obj.remark}-${email}`;
+    const params = new URLSearchParams();
+    params.set("type", streamSettings.network);
+    params.set("encryption", inbound.obj.settings.encryption || "none");
+    if (streamSettings.network === "ws") {
+      if (wsHost) params.set("host", wsHost);
+      if (wsPath) params.set("path", wsPath);
+    } else if (tcpRequest) {
+      const p = tcpRequest.path.at(0);
+      const h = tcpRequest.headers.Host.at(0);
+      if (p) params.set("path", p);
+      if (h) params.set("host", h);
+      if (tcpHeader?.type) params.set("headerType", tcpHeader.type);
+    }
+    params.set("security", streamSettings.security);
+    // Reality inbounds need pbk/fp/sni/sid/spx to connect.
+    const reality = streamSettings.realitySettings;
+    if (streamSettings.security === "reality" && reality) {
+      if (reality.publicKey) params.set("pbk", reality.publicKey);
+      if (reality.fingerprint) params.set("fp", reality.fingerprint);
+      const sni = reality.serverNames?.at(0) ?? reality.dest;
+      if (sni) params.set("sni", sni);
+      const sid = reality.shortIds?.at(0);
+      if (sid) params.set("sid", sid);
+      if (reality.spiderX) params.set("spx", reality.spiderX);
+    }
+    if (streamSettings.network === "xhttp" && streamSettings.xhttpSettings) {
+      const { path, host, mode } = streamSettings.xhttpSettings;
+      if (path) params.set("path", path);
+      if (host) params.set("host", host);
+      if (mode) params.set("mode", mode);
+    }
+
+    configLink = `vless://${uuid}@${url}:${inbound.obj.port}?${params.toString()}#${encodeURIComponent(`${inbound.obj.remark}-${email}`)}`;
   }
 
   const qrBuffer = await QRCode.toBuffer(configLink, {
@@ -562,6 +630,127 @@ export async function genConfig(
 
   const qrFile = new InputFile(qrBuffer, "config.png");
   return { qrFile, configLink };
+}
+
+export async function handleBroadcastMessage(
+  ctx: Context,
+  db: DB,
+): Promise<boolean> {
+  const adminID = ctx.from?.id;
+  if (adminID === undefined) return false;
+  if (!waitingForBroadcast.has(adminID)) return false;
+
+  const photo = ctx.message?.photo?.at(-1);
+  const text = ctx.message?.text;
+
+  // Let menu navigation fall through to the normal switch.
+  if (
+    !photo &&
+    (text === resetBtn || text === cancelBtn || text === broadcastBtn)
+  ) {
+    waitingForBroadcast.delete(adminID);
+    return false;
+  }
+
+  if (!photo && !text) {
+    await ctx.reply("متن یا عکس بفرست تا همونو برای همه بفرستم. برای انصراف «لغو سفارش» یا بازگشت رو بزن.", {
+      reply_markup: adminMenu,
+    });
+    return true;
+  }
+
+  if (text === "بیخیال") {
+    waitingForBroadcast.delete(adminID);
+    pendingBroadcast.delete(adminID);
+    await ctx.reply("اوکی، پیام همگانی کنسل شد.", { reply_markup: adminMenu });
+    return true;
+  }
+
+  if (photo) {
+    pendingBroadcast.set(adminID, {
+      photoFileID: photo.file_id,
+      caption: ctx.message?.caption,
+    });
+  } else {
+    pendingBroadcast.set(adminID, { text: text! });
+  }
+
+  waitingForBroadcast.delete(adminID);
+
+  const recipients = collectBroadcastRecipients(db);
+  await ctx.reply(
+    `این پیام قراره برای ${recipients.length} کاربر ارسال بشه. تایید میکنی؟`,
+    { reply_markup: broadcastConfirmMenu(recipients.length) },
+  );
+  const draft = pendingBroadcast.get(adminID);
+  if (draft?.photoFileID) {
+    await ctx.api.sendPhoto(adminID, draft.photoFileID, {
+      caption: draft.caption ?? "👆 پیش‌نمایش پیام همگانی",
+    });
+  } else if (draft?.text) {
+    await ctx.reply(`👆 پیش‌نمایش پیام همگانی:\n\n${draft.text}`);
+  }
+  return true;
+}
+
+function collectBroadcastRecipients(db: DB): number[] {
+  const ids = new Set<number>(db.getUserIds());
+  ids.delete(ADMIN_ID);
+  return [...ids];
+}
+
+export async function handleBroadcastConfirm(
+  ctx: Context,
+  db: DB,
+): Promise<boolean> {
+  const adminID = ctx.from?.id!;
+  const draft = pendingBroadcast.get(adminID);
+  if (!draft) return false;
+
+  const text = ctx.message?.text ?? "";
+  if (text === resetBtn || text === cancelBtn) {
+    pendingBroadcast.delete(adminID);
+    return false;
+  }
+
+  const confirmMatch = text.match(/^تایید ارسال به (\d+) کاربر ✅$/);
+  if (!confirmMatch) return true;
+
+  pendingBroadcast.delete(adminID);
+
+  const recipients = collectBroadcastRecipients(db);
+  if (recipients.length === 0) {
+    await ctx.reply("کاربری برای ارسال پیدا نکردم.", { reply_markup: adminMenu });
+    return true;
+  }
+
+  await ctx.reply(`باشه، دارم برای ${recipients.length} کاربر میفرستم...`, {
+    reply_markup: adminMenu,
+  });
+
+  let sent = 0;
+  let failed = 0;
+  for (const tgID of recipients) {
+    try {
+      if (draft.photoFileID) {
+        await ctx.api.sendPhoto(tgID, draft.photoFileID, {
+          caption: draft.caption,
+        });
+      } else if (draft.text) {
+        await ctx.api.sendMessage(tgID, draft.text);
+      }
+      sent++;
+    } catch (error) {
+      failed++;
+      console.error(`Broadcast to ${tgID} failed:`, error);
+    }
+    await new Promise((r) => setTimeout(r, 50));
+  }
+
+  await ctx.reply(`تموم شد ✅\n\nارسال موفق: ${sent}\nناموفق: ${failed}`, {
+    reply_markup: adminMenu,
+  });
+  return true;
 }
 
 export async function handleBackup(ctx: Context) {

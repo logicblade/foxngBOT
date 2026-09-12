@@ -43,12 +43,12 @@ export const noSubFoundTxt = `
 export const subFoundTxt = `
 اشتراکی که میخوای تمدید کنی انتخاب کن: 👇🚀
 
-⚠️توجه: فقط اشتراک هایی که نزدیک انقضا هستن یا منقضی شدن قابل تمدیدن!
+⚠️توجه: فقط اشتراک هایی که حجمشون رو به اتمامه یا تموم شده قابل تمدیدن!
 
 🟢: اشتراک فعال
-🟡: اشتراک فعال ولی نزدیک انقضاست
+🟡: اشتراک فعال ولی حجمش رو به اتمامه
 🟠: تا حالا به اشتراک وصل نشدی
-🔴: اشتراک منقضی شده
+🔴: حجم اشتراک به اتمام رسیده
 `;
 export const subFoundGetConfTxt = `
 اشتراکی که لینکشو میخوای انتخاب کن: 👇🚀
@@ -73,38 +73,21 @@ export const statusOffTxt = `
 
 🆔: @foxngsup
 `;
-export const renewTxt250 = `
-💵هزینه تمدید اشتراک شما: 
-  ✅250 هزار تومان
-
-💳شایان براقی - توسعه تعاون💳
-
-<blockquote><code>5029081059314381</code></blockquote>
-🚨(برای کپی کردن شماره کارت روی آن کلیک کنید)
-
-
-⚠️توجه⚠️
-‼️عکس رسید تراکنش خود را همینجا بفرستید تا اشتراک شما به صورت خودکار فعال شود‼️
-`;
-export const renewTxt450 = `
-💵هزینه تمدید اشتراک شما: 
-  ✅450 هزار تومان
-
-💳شایان براقی - توسعه تعاون💳
-
-<blockquote><code>5029081059314381</code></blockquote>
-🚨(برای کپی کردن شماره کارت روی آن کلیک کنید)
-
-
-⚠️توجه⚠️
-‼️عکس رسید تراکنش خود را همینجا بفرستید تا اشتراک شما به صورت خودکار فعال شود‼️
-`;
+// Deprecated: payment texts are now generated via paymentText() in ./plans.
+export const renewTxt250 = ``;
+export const renewTxt450 = ``;
 export const reciptReceiveTxt = `
 با تشکر | رسید شما دریافت شد ✅
 بعد از بررسی ادمین تا چند لحظه دیگه اشتراک شما فعال و از همین ربات بهتون اطلاع میدیم…❤️
 `;
-export const oneM40G = "اشتراک 1 ماهه 40 گیگابایت - 250 هزار تومان";
-export const oneM80G = "اشتراک 1 ماهه 80 گیگابایت - 450 هزار تومان";
+
+// New 5-tier plans. Single source of truth lives in ./plans (PLANS).
+// Kept as deprecated aliases so old imports don't break.
+export const oneM10G = "زمان نامحدود 10 گیگابایت - 150 هزار تومان";
+export const oneM20G = "زمان نامحدود 20 گیگابایت - 300 هزار تومان";
+export const oneM30G = "زمان نامحدود 30 گیگابایت - 450 هزار تومان";
+export const oneM50G = "زمان نامحدود 50 گیگابایت - 750 هزار تومان";
+export const oneM100G = "زمان نامحدود 100 گیگابایت - 1,500 هزار تومان";
 
 export const justImageTxt = `
 شرمنده فقط عکس قبوله!
@@ -122,6 +105,7 @@ export const appStateBtn = "وضعیت خرید و تمدید";
 export const changeSellStateBtn = "تغییر وضعیت خرید";
 export const changeRenewStateBtn = "تغییر وضعیت تمدید";
 export const backupBtn = "بکاپ گرفتن از دیتابیس";
+export const broadcastBtn = "📣 پیام همگانی";
 
 export const welcomeAdminTxt = `
 خوش اومدی!
@@ -131,29 +115,6 @@ export const welcomeAdminTxt = `
 کارو با اضافه کردن پنل شروع کن!
 `;
 
-export const buyTxt250 = `
-💵هزینه خرید اشتراک شما: 
-  ✅250 هزار تومان
-
-💳شایان براقی - توسعه تعاون💳
-
-<blockquote><code>5029081059314381</code></blockquote>
-🚨(برای کپی کردن شماره کارت روی آن کلیک کنید)
-
-
-⚠️توجه⚠️
-‼️عکس رسید تراکنش خود را همینجا بفرستید تا اشتراک شما به صورت خودکار فعال شود‼️
-`;
-export const buyTxt450 = `
-💵هزینه خرید اشتراک شما: 
-  ✅450 هزار تومان
-
-💳شایان براقی - توسعه تعاون💳
-
-<blockquote><code>5029081059314381</code></blockquote>
-🚨(برای کپی کردن شماره کارت روی آن کلیک کنید)
-
-
-⚠️توجه⚠️
-‼️عکس رسید تراکنش خود را همینجا بفرستید تا اشتراک شما به صورت خودکار فعال شود‼️
-`;
+// Deprecated: payment texts are now generated via paymentText() in ./plans.
+export const buyTxt250 = ``;
+export const buyTxt450 = ``;

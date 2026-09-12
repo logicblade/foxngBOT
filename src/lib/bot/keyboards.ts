@@ -6,8 +6,6 @@ import {
   mySubBtn,
   contactTxt,
   resetBtn,
-  oneM40G,
-  oneM80G,
   addPanelBtn,
   myPanelsBtn,
   deletePanelBtn,
@@ -16,7 +14,9 @@ import {
   changeSellStateBtn,
   getConfigBtn,
   backupBtn,
+  broadcastBtn,
 } from "./messages";
+import { PLANS } from "./plans";
 
 export const shareContactKey = new Keyboard()
   .requestContact("☎️ ارسال شماره موبایل")
@@ -35,13 +35,14 @@ export const mainMenu = new Keyboard()
   .resized()
   .persistent();
 
-export const renewMenu = new Keyboard()
-  .text(oneM40G)
-  .row()
-  .text(oneM80G)
-  .row()
-  .text(resetBtn)
-  .resized();
+export const renewMenu = (() => {
+  const kb = new Keyboard();
+  PLANS.forEach((p, i) => {
+    kb.text(p.buttonText);
+    if (i < PLANS.length - 1) kb.row();
+  });
+  return kb.row().text(resetBtn).resized();
+})();
 
 export const adminReplyKeys = (userID: number) =>
   new InlineKeyboard()
@@ -59,5 +60,14 @@ export const adminMenu = new Keyboard()
   .text(changeRenewStateBtn)
   .text(changeSellStateBtn)
   .row()
+  .text(broadcastBtn)
+  .row()
   .text(backupBtn)
   .resized();
+
+export const broadcastConfirmMenu = (pendingCount: number) =>
+  new Keyboard()
+    .text(`تایید ارسال به ${pendingCount} کاربر ✅`)
+    .row()
+    .text(resetBtn)
+    .resized();

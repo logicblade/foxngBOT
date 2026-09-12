@@ -14,6 +14,14 @@ export class DB {
     password TEXT NOT NULL
   )
 `);
+
+    this.db.run(`
+  CREATE TABLE IF NOT EXISTS users (
+    tg_id INTEGER PRIMARY KEY,
+    first_seen INTEGER NOT NULL,
+    last_seen INTEGER NOT NULL
+  )
+`);
   }
 
   addPanel(url: string, name: string, username: string, password: string) {
@@ -50,5 +58,21 @@ export class DB {
       .query("SELECT * FROM credentials")
       .all() as Credential[];
     return creds;
+  }
+
+  upsertUser(tgId: number) {
+    const now = Date.now();
+    this.db.run(
+      `INSERT INTO users (tg_id, first_seen, last_seen) VALUES (?, ?, ?)
+       ON CONFLICT(tg_id) DO UPDATE SET last_seen = excluded.last_seen`,
+      [tgId, now, now],
+    );
+  }
+
+  getUserIds(): number[] {
+    const rows = this.db
+      .query("SELECT tg_id FROM users ORDER BY tg_id")
+      .all() as { tg_id: number }[];
+    return rows.map((r) => r.tg_id);
   }
 }
