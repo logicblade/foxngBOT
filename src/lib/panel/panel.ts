@@ -40,11 +40,11 @@ export class Panel {
     this.password = password;
   }
 
-  getUpdatePath(_url: string, email: string) {
+  getUpdatePath(email: string) {
     return `${this.url}${this.CLIENTS_PATH}/update/${encodeURIComponent(email)}`;
   }
 
-  getAddClientPath(_url: string) {
+  getAddClientPath() {
     return `${this.url}${this.CLIENTS_PATH}/add`;
   }
 
@@ -168,10 +168,6 @@ export class Panel {
 
     const res = await fetch(req);
     return res;
-  }
-
-  async addClientToInbound(inboundID: number, email: string, UUID: string) {
-    await this.handleLogin();
   }
 
   async getConfigJSON() {
