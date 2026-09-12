@@ -191,12 +191,12 @@ interface Client {
 interface StreamSettings {
   network: string;
   security: string;
-  externalProxy: ExternalProxy[];
-  tcpSettings: {
+  externalProxy?: ExternalProxy[];
+  tcpSettings?: {
     acceptProxyProtocol: boolean;
     header: {
       type: string;
-      request: {
+      request?: {
         version: string;
         method: string;
         path: string[];
@@ -204,7 +204,7 @@ interface StreamSettings {
           Host: string[];
         };
       };
-      response: {
+      response?: {
         version: string;
         status: string;
         reason: string;
@@ -212,7 +212,23 @@ interface StreamSettings {
       };
     };
   };
-  kcpSettings: KcpSettings;
+  realitySettings?: {
+    show?: boolean;
+    dest?: string;
+    xver?: number;
+    serverNames?: string[];
+    privateKey?: string;
+    publicKey?: string;
+    shortIds?: string[];
+    fingerprint?: string;
+    spiderX?: string;
+  };
+  xhttpSettings?: {
+    path?: string;
+    host?: string;
+    mode?: string;
+  };
+  kcpSettings?: KcpSettings;
 }
 
 interface ExternalProxy {

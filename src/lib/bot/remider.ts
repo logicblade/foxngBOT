@@ -11,6 +11,17 @@ async function getExpiringClients(db: DB) {
 
   for (const panel of panels) {
     const inbounds = await panel.getInbounds();
+    const clientsRes = await panel.getClients();
+    const trafficByEmail = new Map(
+      (clientsRes?.obj ?? []).map((c) => [
+        c.email,
+        {
+          up: c.traffic ? c.traffic.up : (c.up ?? 0),
+          down: c.traffic ? c.traffic.down : (c.down ?? 0),
+          enable: c.traffic ? c.traffic.enable : c.enable,
+        },
+      ]),
+    );
 
     if (inbounds) {
       const usersDate: ExpiryCheckUser[] = [];
@@ -21,7 +32,12 @@ async function getExpiringClients(db: DB) {
           const stat = obj.clientStats.find(
             (s) => s.uuid === client.id || s.email === client.email,
           );
-          const used = (stat?.down ?? 0) + (stat?.up ?? 0);
+          const counters = trafficByEmail.get(client.email) ?? {
+            up: stat?.up ?? 0,
+            down: stat?.down ?? 0,
+            enable: stat?.enable ?? client.enable,
+          };
+          const used = counters.down + counters.up;
           const remainingGB = client.totalGB - used;
           const now = Date.now();
 

@@ -524,13 +524,28 @@ export async function genConfig(
     inboundID ? inboundID : Number(WHICH_INBOUND),
   );
 
+  const streamSettings = inbound.obj.streamSettings as StreamSettings & {
+    externalProxy?: ExternalProxy[];
+    realitySettings?: {
+      dest?: string;
+      serverNames?: string[];
+      shortIds?: string[];
+      publicKey?: string;
+      fingerprint?: string;
+      spiderX?: string;
+    };
+    xhttpSettings?: { path?: string; host?: string; mode?: string };
+  };
+  const proxies = streamSettings.externalProxy ?? [];
   const useExternalProxy =
-    inbound.obj.streamSettings.externalProxy.length !== 0
-      ? inbound?.obj.streamSettings.externalProxy.at(0)?.dest !== ""
-      : false;
+    proxies.length !== 0 ? proxies.at(0)?.dest !== "" : false;
   const externalProxy = useExternalProxy
-    ? inbound?.obj.streamSettings.externalProxy.at(0)?.dest
+    ? proxies.at(0)?.dest
     : undefined;
+
+  // TCP-only settings are absent on reality/grpc/xhttp inbounds — guard them.
+  const tcpHeader = streamSettings.tcpSettings?.header;
+  const tcpRequest = tcpHeader?.request;
 
   let configLink = "";
   if (inbound.obj.protocol === "vmess") {
@@ -539,33 +554,44 @@ export async function genConfig(
       server: useExternalProxy ? externalProxy! : new URL(panel.url).hostname,
       port: inbound.obj.port,
       uuid: uuid,
-      network: inbound.obj.streamSettings.network,
-      host: inbound.obj.streamSettings.tcpSettings.header.request
-        ? inbound.obj.streamSettings.tcpSettings.header.request.headers.Host.at(
-            0,
-          )
-        : undefined,
-      path: inbound.obj.streamSettings.tcpSettings.header.request
-        ? inbound.obj.streamSettings.tcpSettings.header.request.path.at(0)
-        : undefined,
-      header: inbound.obj.streamSettings.tcpSettings.header.type,
+      network: streamSettings.network,
+      host: tcpRequest ? tcpRequest.headers.Host.at(0) : undefined,
+      path: tcpRequest ? tcpRequest.path.at(0) : undefined,
+      header: tcpHeader?.type ?? "none",
     });
   } else if (inbound.obj.protocol === "vless") {
     const url = useExternalProxy ? externalProxy! : new URL(panel.url).hostname;
 
-    configLink = `vless://${uuid}@${url}:${inbound.obj.port}?type=${inbound.obj.streamSettings.network}&encryption=${inbound.obj.settings.encryption || "none"}${
-      inbound.obj.streamSettings.tcpSettings.header.request
-        ? `&path=${encodeURIComponent(
-            inbound.obj.streamSettings.tcpSettings.header.request.path.at(0)!,
-          )}`
-        : ""
-    }${
-      inbound.obj.streamSettings.tcpSettings.header.request
-        ? `&host=${inbound.obj.streamSettings.tcpSettings.header.request.headers.Host.at(
-            0,
-          )}`
-        : ""
-    }&headerType=${inbound.obj.streamSettings.tcpSettings.header.type}&security=${inbound.obj.streamSettings.security}#${inbound.obj.remark}-${email}`;
+    const params = new URLSearchParams();
+    params.set("type", streamSettings.network);
+    params.set("encryption", inbound.obj.settings.encryption || "none");
+    if (tcpRequest) {
+      const p = tcpRequest.path.at(0);
+      const h = tcpRequest.headers.Host.at(0);
+      if (p) params.set("path", p);
+      if (h) params.set("host", h);
+      if (tcpHeader?.type) params.set("headerType", tcpHeader.type);
+    }
+    params.set("security", streamSettings.security);
+    // Reality inbounds need pbk/fp/sni/sid/spx to connect.
+    const reality = streamSettings.realitySettings;
+    if (streamSettings.security === "reality" && reality) {
+      if (reality.publicKey) params.set("pbk", reality.publicKey);
+      if (reality.fingerprint) params.set("fp", reality.fingerprint);
+      const sni = reality.serverNames?.at(0) ?? reality.dest;
+      if (sni) params.set("sni", sni);
+      const sid = reality.shortIds?.at(0);
+      if (sid) params.set("sid", sid);
+      if (reality.spiderX) params.set("spx", reality.spiderX);
+    }
+    if (streamSettings.network === "xhttp" && streamSettings.xhttpSettings) {
+      const { path, host, mode } = streamSettings.xhttpSettings;
+      if (path) params.set("path", path);
+      if (host) params.set("host", host);
+      if (mode) params.set("mode", mode);
+    }
+
+    configLink = `vless://${uuid}@${url}:${inbound.obj.port}?${params.toString()}#${inbound.obj.remark}-${email}`;
   }
 
   const qrBuffer = await QRCode.toBuffer(configLink, {
