@@ -12,8 +12,11 @@ import {
   subFoundGetConfTxt,
   subFoundTxt,
   welcomeAdminTxt,
+  resetBtn,
+  cancelBtn,
+  broadcastBtn,
 } from "./messages";
-import { adminMenu, mainMenu, renewMenu } from "./keyboards";
+import { adminMenu, broadcastConfirmMenu, mainMenu, renewMenu } from "./keyboards";
 import type { DB } from "../../util/db";
 import type { Conversation } from "@grammyjs/conversations";
 import { db, WHICH_INBOUND } from "../..";
@@ -34,6 +37,12 @@ export const waitingForCreateImage = new Set<number>();
 export const pendingCreates = new Map<number, { photoFileID: string }>();
 export const pendingCreateConfig = new Set<number>();
 export const pendingCreateConfigType = new Map<number, ConfigPrice>();
+
+export const waitingForBroadcast = new Set<number>();
+export const pendingBroadcast = new Map<
+  number,
+  { text?: string; photoFileID?: string; caption?: string }
+>();
 
 export const state: State = {
   isRenewActive: true,
@@ -602,6 +611,127 @@ export async function genConfig(
 
   const qrFile = new InputFile(qrBuffer, "config.png");
   return { qrFile, configLink };
+}
+
+export async function handleBroadcastMessage(
+  ctx: Context,
+  db: DB,
+): Promise<boolean> {
+  const adminID = ctx.from?.id;
+  if (adminID === undefined) return false;
+  if (!waitingForBroadcast.has(adminID)) return false;
+
+  const photo = ctx.message?.photo?.at(-1);
+  const text = ctx.message?.text;
+
+  // Let menu navigation fall through to the normal switch.
+  if (
+    !photo &&
+    (text === resetBtn || text === cancelBtn || text === broadcastBtn)
+  ) {
+    waitingForBroadcast.delete(adminID);
+    return false;
+  }
+
+  if (!photo && !text) {
+    await ctx.reply("متن یا عکس بفرست تا همونو برای همه بفرستم. برای انصراف «لغو سفارش» یا بازگشت رو بزن.", {
+      reply_markup: adminMenu,
+    });
+    return true;
+  }
+
+  if (text === "بیخیال") {
+    waitingForBroadcast.delete(adminID);
+    pendingBroadcast.delete(adminID);
+    await ctx.reply("اوکی، پیام همگانی کنسل شد.", { reply_markup: adminMenu });
+    return true;
+  }
+
+  if (photo) {
+    pendingBroadcast.set(adminID, {
+      photoFileID: photo.file_id,
+      caption: ctx.message?.caption,
+    });
+  } else {
+    pendingBroadcast.set(adminID, { text: text! });
+  }
+
+  waitingForBroadcast.delete(adminID);
+
+  const recipients = collectBroadcastRecipients(db);
+  await ctx.reply(
+    `این پیام قراره برای ${recipients.length} کاربر ارسال بشه. تایید میکنی؟`,
+    { reply_markup: broadcastConfirmMenu(recipients.length) },
+  );
+  const draft = pendingBroadcast.get(adminID);
+  if (draft?.photoFileID) {
+    await ctx.api.sendPhoto(adminID, draft.photoFileID, {
+      caption: draft.caption ?? "👆 پیش‌نمایش پیام همگانی",
+    });
+  } else if (draft?.text) {
+    await ctx.reply(`👆 پیش‌نمایش پیام همگانی:\n\n${draft.text}`);
+  }
+  return true;
+}
+
+function collectBroadcastRecipients(db: DB): number[] {
+  const ids = new Set<number>(db.getUserIds());
+  ids.delete(ADMIN_ID);
+  return [...ids];
+}
+
+export async function handleBroadcastConfirm(
+  ctx: Context,
+  db: DB,
+): Promise<boolean> {
+  const adminID = ctx.from?.id!;
+  const draft = pendingBroadcast.get(adminID);
+  if (!draft) return false;
+
+  const text = ctx.message?.text ?? "";
+  if (text === resetBtn || text === cancelBtn) {
+    pendingBroadcast.delete(adminID);
+    return false;
+  }
+
+  const confirmMatch = text.match(/^تایید ارسال به (\d+) کاربر ✅$/);
+  if (!confirmMatch) return true;
+
+  pendingBroadcast.delete(adminID);
+
+  const recipients = collectBroadcastRecipients(db);
+  if (recipients.length === 0) {
+    await ctx.reply("کاربری برای ارسال پیدا نکردم.", { reply_markup: adminMenu });
+    return true;
+  }
+
+  await ctx.reply(`باشه، دارم برای ${recipients.length} کاربر میفرستم...`, {
+    reply_markup: adminMenu,
+  });
+
+  let sent = 0;
+  let failed = 0;
+  for (const tgID of recipients) {
+    try {
+      if (draft.photoFileID) {
+        await ctx.api.sendPhoto(tgID, draft.photoFileID, {
+          caption: draft.caption,
+        });
+      } else if (draft.text) {
+        await ctx.api.sendMessage(tgID, draft.text);
+      }
+      sent++;
+    } catch (error) {
+      failed++;
+      console.error(`Broadcast to ${tgID} failed:`, error);
+    }
+    await new Promise((r) => setTimeout(r, 50));
+  }
+
+  await ctx.reply(`تموم شد ✅\n\nارسال موفق: ${sent}\nناموفق: ${failed}`, {
+    reply_markup: adminMenu,
+  });
+  return true;
 }
 
 export async function handleBackup(ctx: Context) {
