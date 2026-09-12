@@ -1,4 +1,4 @@
-import { Bot, Context, Keyboard } from "grammy";
+import { Bot, Context, InputFile, Keyboard } from "grammy";
 import { DB } from "../../util/db";
 import {
   addPanelConv,
@@ -292,68 +292,99 @@ export class TelBot {
       if (adminID !== ADMIN_ID)
         return await ctx.answerCallbackQuery({ text: "Not allowed" });
 
-      const userId = Number(
-        ctx.callbackQuery?.data!.replace("createAccept:", ""),
-      );
-      const pending = pendingCreates.get(userId);
-      if (!pending)
-        return await ctx.answerCallbackQuery({ text: "No pending request" });
+      try {
+        const userId = Number(
+          ctx.callbackQuery?.data!.replace("createAccept:", ""),
+        );
+        const pending = pendingCreates.get(userId);
+        if (!pending)
+          return await ctx.answerCallbackQuery({ text: "No pending request" });
 
-      const panels = getAllPanels(db);
-      if (panels.length === 0)
-        return await ctx.answerCallbackQuery({ text: "No panels available" });
+        const panels = getAllPanels(db);
+        if (panels.length === 0)
+          return await ctx.answerCallbackQuery({ text: "No panels available" });
 
-      for (const panel of panels) {
-        if (panel.name === WHICH_PANEL) {
-          const uuid = await panel.getNewUUID();
-          const email = creatingEmail.get(userId)!;
+        const panel = panels.find((p) => p.name === WHICH_PANEL);
+        if (!panel)
+          return await ctx.answerCallbackQuery({ text: "Panel not found!" });
 
-          const type = pendingCreateConfigType.get(userId)!;
-          const plan = getPlan(type)!;
+        await ctx.answerCallbackQuery({ text: "در حال ساخت..." });
 
-          pendingCreates.delete(userId);
-          pendingCreateConfig.delete(userId);
-          pendingCreateConfigType.delete(userId);
-
-          // Granted quota comes from the plan table (title GB vs granted GB).
-          const newClient: NewPanelClient = {
-            email,
-            uuid: uuid ?? undefined,
-            flow: "",
-            limitIp: 0,
-            totalGB: Util.gigsToBytes(plan.grantGB),
-            expiryTime: Date.now() + Util.getUnixTimeOf({ days: plan.durationDays }),
-            enable: true,
-            tgId: userId,
-            comment: String(userId),
-            subId: "",
-          };
-
-          creatingEmail.delete(userId);
-
-          const res = await panel.addClient(Number(WHICH_INBOUND), newClient);
-
-          const responseBody = await res.body?.text();
-
-          if (res.status === 200 && responseBody?.includes("true")) {
-            const createdUUID = uuid ?? "";
-            const { qrFile, configLink } = await genConfig(
-              panel,
-              email,
-              createdUUID,
-            );
-            await ctx.api.sendPhoto(userId, qrFile, {
-              caption: `اشتراک شما با موفقیت فعال شد ✅\n\nلینک کانفیگ شما 👇\n(برای کپی کردن لینک یک بار روی آن کلیک کنید.)\n\n<code>${configLink}</code>\n\nاگه بلد نیستی از لینک استفاده کنی از دکمه\n"⚙️ آموزش اتصال به کانفیگ" استفاده کن`,
-              parse_mode: "HTML",
-            });
-            await ctx.reply("تایید شد ✅");
-            await ctx.answerCallbackQuery();
-          } else {
-            console.log(res.status, responseBody);
-            await ctx.answerCallbackQuery({ text: "خطا در ساخت اشتراک!" });
-          }
-          break;
+        const type = pendingCreateConfigType.get(userId);
+        const plan = getPlan(type ?? "");
+        if (!plan) {
+          console.error(`createAccept: unknown plan type=${type}`);
+          return await ctx.reply(`خطا: پلن نامشخص (${type})`);
         }
+        const email = creatingEmail.get(userId);
+        if (!email) {
+          console.error(`createAccept: no email for user=${userId}`);
+          return await ctx.reply("خطا: ایمیل کاربر پیدا نشد!");
+        }
+
+        const uuid = await panel.getNewUUID();
+        if (!uuid) {
+          return await ctx.reply("خطا در گرفتن UUID از پنل!");
+        }
+
+        pendingCreates.delete(userId);
+        pendingCreateConfig.delete(userId);
+        pendingCreateConfigType.delete(userId);
+
+        // Granted quota comes from the plan table (title GB vs granted GB).
+        const newClient: NewPanelClient = {
+          email,
+          uuid,
+          flow: "",
+          limitIp: 0,
+          totalGB: Util.gigsToBytes(plan.grantGB),
+          expiryTime: Date.now() + Util.getUnixTimeOf({ days: plan.durationDays }),
+          enable: true,
+          tgId: userId,
+          comment: String(userId),
+          subId: "",
+        };
+
+        creatingEmail.delete(userId);
+
+        let res: Response;
+        try {
+          res = await panel.addClient(Number(WHICH_INBOUND), newClient);
+        } catch (error) {
+          console.error("createAccept: addClient threw:", error);
+          return await ctx.reply("خطا در ارتباط با پنل!");
+        }
+
+        const responseBody = await res.text().catch(() => "");
+
+        if (res.status === 200 && responseBody?.includes("true")) {
+          let qrFile: InputFile;
+          let configLink: string;
+          try {
+            ({ qrFile, configLink } = await genConfig(panel, email, uuid));
+          } catch (error) {
+            console.error("createAccept: genConfig threw:", error);
+            await ctx.api.sendMessage(
+              userId,
+              "اشتراک شما ساخته شد ولی ساخت لینک کانفیگ خطا خورد. به پشتیبانی پیام بده 👇\n\n🆔: @foxngsup",
+            );
+            return await ctx.reply("ساخته شد ولی لینک خطا خورد ❌");
+          }
+          await ctx.api.sendPhoto(userId, qrFile, {
+            caption: `اشتراک شما با موفقیت فعال شد ✅\n\nلینک کانفیگ شما 👇\n(برای کپی کردن لینک یک بار روی آن کلیک کنید.)\n\n<code>${configLink}</code>\n\nاگه بلد نیستی از لینک استفاده کنی از دکمه\n"⚙️ آموزش اتصال به کانفیگ" استفاده کن`,
+            parse_mode: "HTML",
+          });
+          await ctx.reply("تایید شد ✅");
+          await ctx.answerCallbackQuery();
+        } else {
+          console.log(res.status, responseBody);
+          await ctx.answerCallbackQuery({ text: "خطا در ساخت اشتراک!" });
+        }
+      } catch (error) {
+        console.error("createAccept handler threw:", error);
+        try {
+          await ctx.answerCallbackQuery({ text: "خطای داخلی!" });
+        } catch {}
       }
     });
     this.bot.callbackQuery(/^renewAccept:/, async (ctx: Context) => {
@@ -361,68 +392,101 @@ export class TelBot {
       if (adminID !== ADMIN_ID)
         return await ctx.answerCallbackQuery({ text: "Not allowed" });
 
-      const userId = Number(
-        ctx.callbackQuery?.data!.replace("renewAccept:", ""),
-      );
-      const pending = pendingRenewals.get(userId);
-      if (!pending)
-        return await ctx.answerCallbackQuery({ text: "No pending request" });
+      try {
+        const userId = Number(
+          ctx.callbackQuery?.data!.replace("renewAccept:", ""),
+        );
+        const pending = pendingRenewals.get(userId);
+        if (!pending)
+          return await ctx.answerCallbackQuery({ text: "No pending request" });
 
-      const { UUID, inboundID } = pendingConfig.get(userId)!;
-      const type = pendingConfigType.get(userId)!;
+        await ctx.answerCallbackQuery({ text: "در حال تمدید..." });
 
-      pendingRenewals.delete(userId);
-      pendingConfig.delete(userId);
-      pendingConfigType.delete(userId);
-
-      const configs = renewCache[userId]?.filter(
-        (v) =>
-          (v.isRenewable && v.uuid === UUID) ||
-          (v.status === false && v.uuid === UUID),
-      );
-
-      const rawEmail = Util.removeEmoji(configs?.at(0)?.email!);
-      const emailParts = rawEmail.split("-");
-      const email = emailParts.slice(1).join("-");
-
-      console.log("the UUID:", UUID);
-
-      const panel = await getConfigsPanel(UUID, db);
-      if (!panel) {
-        return await ctx.answerCallbackQuery({ text: "Panel not found!" });
-      }
-
-      // New API replaces the whole client row: fetch current row first,
-      // then extend expiry (+duration from max(now, current)) and add quota.
-      const current = await panel.getClientByEmail(email);
-      const currentObj = current?.obj;
-      const plan = getPlan(type)!;
-      const baseExpiry = Math.max(Date.now(), currentObj?.expiryTime ?? 0);
-      const updatedClient: PanelClientPayload = {
-        email,
-        uuid: UUID,
-        flow: "",
-        limitIp: currentObj?.limitIp ?? 0,
-        totalGB:
-          (currentObj?.totalGB ?? 0) + Util.gigsToBytes(plan.grantGB),
-        expiryTime: baseExpiry + Util.getUnixTimeOf({ days: plan.durationDays }),
-        enable: true,
-        tgId: userId,
-        comment: String(userId),
-        subId: currentObj?.subId ?? "",
-      };
-
-      const res = await panel.updateClient(email, updatedClient);
-
-      if (res.status === 200) {
-        const reset = await panel.resetClientTraffic(inboundID, email);
-        if (reset) {
-          await ctx.api.sendMessage(userId, "اشتراک شما با موفقیت فعال شد ✅");
-          await ctx.reply("تایید شد ✅");
-          await ctx.answerCallbackQuery();
+        const pendingCfg = pendingConfig.get(userId);
+        if (!pendingCfg) {
+          console.error(`renewAccept: no pendingConfig for user=${userId}`);
+          return await ctx.reply("خطا: اطلاعات تمدید پیدا نشد!");
         }
-      } else {
-        console.log(res.status);
+        const { UUID, inboundID } = pendingCfg;
+        const type = pendingConfigType.get(userId);
+        const plan = getPlan(type ?? "");
+        if (!plan) {
+          console.error(`renewAccept: unknown plan type=${type}`);
+          return await ctx.reply(`خطا: پلن نامشخص (${type})`);
+        }
+
+        pendingRenewals.delete(userId);
+        pendingConfig.delete(userId);
+        pendingConfigType.delete(userId);
+
+        const configs = renewCache[userId]?.filter(
+          (v) =>
+            (v.isRenewable && v.uuid === UUID) ||
+            (v.status === false && v.uuid === UUID),
+        );
+        const rawEmail = configs?.at(0)?.email;
+        if (!rawEmail) {
+          console.error(`renewAccept: no cached config for uuid=${UUID}`);
+          return await ctx.reply("خطا: اشتراک در کش پیدا نشد!");
+        }
+
+        const emailParts = Util.removeEmoji(rawEmail).split("-");
+        const email = emailParts.slice(1).join("-");
+
+        console.log("the UUID:", UUID);
+
+        const panel = await getConfigsPanel(UUID, db);
+        if (!panel) {
+          return await ctx.answerCallbackQuery({ text: "Panel not found!" });
+        }
+
+        // New API replaces the whole client row: fetch current row first,
+        // then extend expiry (+duration from max(now, current)) and add quota.
+        const current = await panel.getClientByEmail(email);
+        const currentObj = current?.obj;
+        const baseExpiry = Math.max(Date.now(), currentObj?.expiryTime ?? 0);
+        const updatedClient: PanelClientPayload = {
+          email,
+          uuid: UUID,
+          flow: "",
+          limitIp: currentObj?.limitIp ?? 0,
+          totalGB:
+            (currentObj?.totalGB ?? 0) + Util.gigsToBytes(plan.grantGB),
+          expiryTime: baseExpiry + Util.getUnixTimeOf({ days: plan.durationDays }),
+          enable: true,
+          tgId: userId,
+          comment: String(userId),
+          subId: currentObj?.subId ?? "",
+        };
+
+        let res: Response;
+        try {
+          res = await panel.updateClient(email, updatedClient);
+        } catch (error) {
+          console.error("renewAccept: updateClient threw:", error);
+          return await ctx.reply("خطا در ارتباط با پنل!");
+        }
+
+        if (res.status === 200) {
+          const reset = await panel.resetClientTraffic(inboundID, email);
+          if (reset) {
+            await ctx.api.sendMessage(userId, "اشتراک شما با موفقیت فعال شد ✅");
+            await ctx.reply("تایید شد ✅");
+            await ctx.answerCallbackQuery();
+          } else {
+            console.error(`renewAccept: resetClientTraffic failed for ${email}`);
+            await ctx.reply("تمدید شد ولی ریست ترافیک خطا خورد ❌");
+          }
+        } else {
+          const body = await res.text().catch(() => "");
+          console.error(`renewAccept: updateClient status=${res.status} body=${body}`);
+          await ctx.reply("خطا در تمدید اشتراک!");
+        }
+      } catch (error) {
+        console.error("renewAccept handler threw:", error);
+        try {
+          await ctx.answerCallbackQuery({ text: "خطای داخلی!" });
+        } catch {}
       }
     });
     this.bot.callbackQuery(/^getConfig:/, async (ctx) => {
