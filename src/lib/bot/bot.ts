@@ -360,7 +360,9 @@ export class TelBot {
           console.error(
             `createAccept: addClient failed status=${added.status} body=${added.body}`,
           );
-          return await ctx.reply("خطا در ساخت اشتراک!");
+          return await ctx.reply(
+            "خطا: UUID از پنل تأیید نشد! اشتراک ممکنه ساخته شده باشه، پنل رو چک کن ❌",
+          );
         }
 
         // The panel's stored uuid is the source of truth for the config link.

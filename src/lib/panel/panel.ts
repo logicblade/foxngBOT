@@ -170,7 +170,18 @@ export class Panel {
 
     try {
       const res = await fetch(req);
+      if (!res.ok) {
+        console.error(
+          `getClientByEmail ${email} failed: ${res.status}. Body: ${(await res.text().catch(() => "")).slice(0, 300)}`,
+        );
+        return;
+      }
       const js = (await res.json()) as GetClientResponse;
+      if (!js?.obj) {
+        console.error(
+          `getClientByEmail ${email}: no client in response (success=${js?.success}, msg=${js?.msg})`,
+        );
+      }
       return js;
     } catch (error) {
       console.error("Failed to get client:", error);
@@ -182,6 +193,8 @@ export class Panel {
    * Adds a client and returns the credential the panel ACTUALLY stored.
    * The panel owns the uuid/vless-id: after a successful add we re-read the
    * row and use its uuid for config links — never the value we requested.
+   * If the stored uuid cannot be verified, this FAILS — no fallback — so a
+   * config link is never built from an unconfirmed credential.
    */
   async addClient(
     inboundID: number,
@@ -200,12 +213,12 @@ export class Panel {
       return { ok: false, status: res.status, body: text.slice(0, 500) };
     }
 
-    // Re-read the stored row (source of truth). Some panel versions return
-    // obj as a single object, others as a one-element array — accept both.
+    // 1st verification attempt: the single-client endpoint. Some panel
+    // versions return obj as a single object, others as a one-element array.
     try {
       const stored = await this.getClientByEmail(client.email);
       const row = Array.isArray(stored?.obj) ? stored.obj[0] : stored?.obj;
-      const uuid = row?.uuid;
+      const uuid = Panel.extractClientUuid(row);
       if (uuid) {
         if (client.uuid && uuid !== client.uuid) {
           console.warn(
@@ -215,19 +228,46 @@ export class Panel {
         return { ok: true, uuid };
       }
     } catch (error) {
-      console.error("addClient: verification read failed:", error);
+      console.error("addClient: verification read threw:", error);
     }
 
-    // Could not confirm what the panel stored. Only fall back to the
-    // requested uuid if there is one; otherwise treat as failure so we
-    // never send the user a config link with a wrong/placeholder id.
-    if (client.uuid) {
-      console.error(
-        `addClient: could not verify stored uuid for ${client.email}, falling back to requested uuid`,
-      );
-      return { ok: true, uuid: client.uuid };
+    // 2nd attempt: scan the full clients list for this email.
+    try {
+      const list = await this.getClients();
+      const rows = Array.isArray(list?.obj) ? list.obj : [];
+      const row = rows.find((r) => r?.email === client.email);
+      const uuid = Panel.extractClientUuid(row);
+      if (uuid) {
+        if (client.uuid && uuid !== client.uuid) {
+          console.warn(
+            `addClient: panel stored a different uuid than requested for ${client.email} (requested=${client.uuid}, stored=${uuid})`,
+          );
+        }
+        return { ok: true, uuid };
+      }
+    } catch (error) {
+      console.error("addClient: list verification threw:", error);
     }
+
+    // The panel's stored credential could not be confirmed — hard fail.
+    // A config link built from anything else would not work.
+    console.error(
+      `addClient: could not verify stored uuid for ${client.email} — failing without fallback`,
+    );
     return { ok: false, status: res.status, body: text.slice(0, 500) };
+  }
+
+  /** Pulls the vless/vmess credential off a stored client row. */
+  private static extractClientUuid(
+    row: PanelClient | undefined | null,
+  ): string | undefined {
+    if (!row) return undefined;
+    if (typeof row.uuid === "string" && row.uuid) return row.uuid;
+    // Some panel versions keep the vless credential in a string `id` field
+    // (numeric row ids don't count — real uuids contain dashes).
+    const id = (row as unknown as { id?: unknown }).id;
+    if (typeof id === "string" && id.includes("-")) return id;
+    return undefined;
   }
 
   async updateClient(email: string, client: PanelClientPayload) {
