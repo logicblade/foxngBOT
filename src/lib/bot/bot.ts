@@ -332,13 +332,14 @@ export class TelBot {
         pendingCreateConfigType.delete(userId);
 
         // Granted quota comes from the plan table (title GB vs granted GB).
+        // expiryTime 0 = never expires (time-unlimited, quota-only).
         const newClient: NewPanelClient = {
           email,
           uuid,
           flow: "",
           limitIp: 0,
           totalGB: Util.gigsToBytes(plan.grantGB),
-          expiryTime: Date.now() + Util.getUnixTimeOf({ days: plan.durationDays }),
+          expiryTime: 0,
           enable: true,
           tgId: userId,
           comment: String(userId),
@@ -441,10 +442,9 @@ export class TelBot {
         }
 
         // New API replaces the whole client row: fetch current row first,
-        // then extend expiry (+duration from max(now, current)) and add quota.
+        // then add quota. Expiry stays unlimited (0 = never expires).
         const current = await panel.getClientByEmail(email);
         const currentObj = current?.obj;
-        const baseExpiry = Math.max(Date.now(), currentObj?.expiryTime ?? 0);
         const updatedClient: PanelClientPayload = {
           email,
           uuid: UUID,
@@ -452,7 +452,7 @@ export class TelBot {
           limitIp: currentObj?.limitIp ?? 0,
           totalGB:
             (currentObj?.totalGB ?? 0) + Util.gigsToBytes(plan.grantGB),
-          expiryTime: baseExpiry + Util.getUnixTimeOf({ days: plan.durationDays }),
+          expiryTime: 0,
           enable: true,
           tgId: userId,
           comment: String(userId),

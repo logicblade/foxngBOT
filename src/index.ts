@@ -5,8 +5,8 @@ import { ADMIN_ID } from "./lib/bot/helpers";
 import { CronJob } from "cron";
 import { informUserExpiry } from "./lib/bot/remider";
 
-export const WHICH_PANEL = "direct1";
-export const WHICH_INBOUND = "1";
+export const WHICH_PANEL = "Tunnel";
+export const WHICH_INBOUND = "8";
 
 dotenv.config({ quiet: true });
 

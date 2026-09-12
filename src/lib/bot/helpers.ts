@@ -334,7 +334,7 @@ export async function handleCheckAccount(ctx: Context, db: DB) {
 
     for (const conf of configs) {
       const email = Util.removeEmoji(conf.email);
-      statusTxt += `${conf.status ? (conf.isRenewable ? "🟡" : "🟢") : "🔴"} ${email} - ${conf.status ? (conf.isRenewable ? "نزدیک انقضا" : "فعال") : "به اتمام رسیده"}\n`;
+      statusTxt += `${conf.status ? (conf.isRenewable ? "🟡" : "🟢") : "🔴"} ${email} - ${conf.status ? (conf.isRenewable ? "رو به اتمام" : "فعال") : "به اتمام رسیده"}\n`;
     }
 
     await ctx.reply(statusTxt, { reply_markup: mainMenu });

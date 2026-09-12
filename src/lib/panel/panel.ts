@@ -258,14 +258,13 @@ export class Panel {
                 ? clientRow.traffic.down + clientRow.traffic.up
                 : (stat?.down ?? 0) + (stat?.up ?? 0));
             const remainingGB = client.totalGB - used;
+            // Time-unlimited plans: renewability is quota-based only.
             const isRenewable =
-              (client.expiryTime !== 0 &&
-                client.expiryTime - Date.now() <
-                  Util.getUnixTimeOf({ days: 3 })) ||
-              (client.totalGB !== 0 && remainingGB <= Util.gigsToBytes(3));
+              client.totalGB !== 0 && remainingGB <= Util.gigsToBytes(3);
             const inboundRemark = obj.remark;
             const status = clientRow?.traffic?.enable ?? stat?.enable ?? client.enable ?? false;
-            const hasStarted = client.expiryTime > 0;
+            // "Started" = has actually transferred traffic (expiry is 0/unlimited now).
+            const hasStarted = used > 0 || client.expiryTime > 0;
             const displayEmail = clientRow?.email ?? stat?.email ?? client.email ?? "";
             const email = `${status ? (hasStarted ? (isRenewable ? "🟡" : "🟢") : "🟠") : "🔴"} ${inboundRemark}-${displayEmail}`;
 

@@ -8,50 +8,46 @@ export interface Plan {
   grantGB: number;
   /** Price in tomans */
   priceToman: number;
-  durationDays: number;
   buttonText: string;
 }
 
+// Subscriptions are time-unlimited: clients are created with expiryTime = 0
+// ("never expires" in 3x-ui) and quota is the only limit — no duration here.
 export const PLANS: Plan[] = [
   {
     id: "10g",
     titleGB: 10,
     grantGB: 8,
     priceToman: 150000,
-    durationDays: 30,
-    buttonText: "اشتراک 1 ماهه 10 گیگابایت - 150 هزار تومان",
+    buttonText: "اشتراک 10 گیگابایت - 150 هزار تومان",
   },
   {
     id: "20g",
     titleGB: 20,
     grantGB: 17,
     priceToman: 300000,
-    durationDays: 30,
-    buttonText: "اشتراک 1 ماهه 20 گیگابایت - 300 هزار تومان",
+    buttonText: "اشتراک 20 گیگابایت - 300 هزار تومان",
   },
   {
     id: "30g",
     titleGB: 30,
     grantGB: 27,
     priceToman: 450000,
-    durationDays: 30,
-    buttonText: "اشتراک 1 ماهه 30 گیگابایت - 450 هزار تومان",
+    buttonText: "اشتراک 30 گیگابایت - 450 هزار تومان",
   },
   {
     id: "50g",
     titleGB: 50,
     grantGB: 47,
     priceToman: 750000,
-    durationDays: 30,
-    buttonText: "اشتراک 1 ماهه 50 گیگابایت - 750 هزار تومان",
+    buttonText: "اشتراک 50 گیگابایت - 750 هزار تومان",
   },
   {
     id: "100g",
     titleGB: 100,
     grantGB: 95,
     priceToman: 1500000,
-    durationDays: 30,
-    buttonText: "اشتراک 1 ماهه 100 گیگابایت - 1500 هزار تومان",
+    buttonText: "اشتراک 100 گیگابایت - 1500 هزار تومان",
   },
 ];
 
