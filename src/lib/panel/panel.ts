@@ -33,6 +33,12 @@ export class Panel {
   constructor(name: string, url: string, usename: string, password: string) {
     this.headers.set("Content-Type", "application/json");
     this.headers.set("Accept", "application/json");
+    // Some frontings (Cloudflare Tunnel / WAF / bot-fight-mode) 403
+    // non-browser clients. Look like a browser.
+    this.headers.set(
+      "User-Agent",
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
+    );
 
     this.name = name;
     this.url = url;
@@ -68,11 +74,22 @@ export class Panel {
     const req = Util.newGetRequest(url, this.headers);
 
     const res = await fetch(req);
-    const js = (await res.json()) as GetInboundResponse;
+    if (!res.ok) {
+      const snippet = (await res.text().catch(() => "")).slice(0, 500);
+      throw new Error(
+        `getInboundByID ${inboundID} failed: ${res.status}. Body: ${snippet}`,
+      );
+    }
+    const js = (await res.json().catch(() => null)) as GetInboundResponse | null;
+    if (!js || !js.obj) {
+      throw new Error(
+        `getInboundByID ${inboundID} returned no inbound (success=${js?.success}, msg=${js?.msg})`,
+      );
+    }
 
     const parsed: GetInboundResponse = {
       ...js,
-      obj: js.obj && this.parseInbound(js.obj),
+      obj: this.parseInbound(js.obj),
     };
 
     return parsed;
@@ -101,17 +118,30 @@ export class Panel {
 
     try {
       const res = await fetch(req);
+      if (!res.ok) {
+        const snippet = (await res.text().catch(() => "")).slice(0, 500);
+        console.error(
+          `Failed to get all inbounds for ${this.name}: GET ${url} -> ${res.status}. Body: ${snippet}`,
+        );
+        return;
+      }
 
-      const js = (await res.json()) as GetInboundsResponse;
+      const js = (await res.json().catch(() => null)) as GetInboundsResponse | null;
+      if (!js || !Array.isArray(js.obj)) {
+        console.error(
+          `Failed to get all inbounds for ${this.name}: bad payload (success=${js?.success}, msg=${js?.msg})`,
+        );
+        return;
+      }
 
       const parsed: GetInboundsResponse = {
         ...js,
-        obj: (js.obj ?? []).map((obj) => this.parseInbound(obj)),
+        obj: js.obj.map((obj) => this.parseInbound(obj)),
       };
 
       return parsed;
     } catch (error) {
-      console.error("Failed to get all inbounds:", error);
+      console.error(`Failed to get all inbounds for ${this.name}:`, error);
       return;
     }
   }
@@ -311,23 +341,33 @@ export class Panel {
 
     const url = `${this.url}${this.LOGIN_PATH}`;
 
-    const req = Util.newPostRequest(url, this.headers, JSON.stringify(user));
-
-    const res = await fetch(req);
+    const res = await fetch(
+      Util.newPostRequest(url, this.headers, JSON.stringify(user)),
+    );
     if (res.status !== 200) {
-      console.error("Failed to get response, status code", res.status);
+      const snippet = (await res.text().catch(() => "")).slice(0, 500);
+      console.error(
+        `Failed to login for ${this.name}: POST ${url} -> status ${res.status}. Body: ${snippet}`,
+      );
       return "error";
     }
 
-    const setCookieHeader = res.headers.get("Set-Cookie");
-    if (setCookieHeader?.includes("3x-ui=")) {
-      const tokenFromCookie = setCookieHeader.split(";")[0];
-      if (tokenFromCookie) {
-        this.headers.set("Cookie", tokenFromCookie!);
-        return "okay";
-      }
+    // Bun may fold multiple Set-Cookie headers into one comma-joined value.
+    const setCookieHeader =
+      res.headers.get("Set-Cookie") ?? res.headers.get("set-cookie");
+    const cookies = setCookieHeader ? setCookieHeader.split(/,(?=[^;,]+=[^;,]*;)/) : [];
+    const sessionCookie = cookies
+      .map((c) => c.trim().split(";")[0]?.trim() ?? "")
+      .find((c) => c.startsWith("3x-ui=") && c.length > "3x-ui=".length);
+    if (sessionCookie) {
+      this.headers.set("Cookie", sessionCookie);
+      return "okay";
     }
 
+    const bodySnippet = (await res.text().catch(() => "")).slice(0, 500);
+    console.error(
+      `Login for ${this.name} returned 200 but no 3x-ui session cookie. Body: ${bodySnippet}`,
+    );
     return "error";
   }
 
@@ -336,8 +376,12 @@ export class Panel {
 
     const req = Util.newGetRequest(loginURL, this.headers);
 
-    const res = await fetch(req);
-
-    return res.status === 200;
+    try {
+      const res = await fetch(req);
+      return res.status === 200;
+    } catch (error) {
+      console.error(`Status check failed for ${this.name}:`, error);
+      return false;
+    }
   }
 }
