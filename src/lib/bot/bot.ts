@@ -312,63 +312,33 @@ export class TelBot {
           pendingCreateConfig.delete(userId);
           pendingCreateConfigType.delete(userId);
 
-          let settings = "";
-          if (type === "250") {
-            settings = JSON.stringify({
-              clients: [
-                {
-                  id: uuid,
-                  flow: "",
-                  email,
-                  limitIp: 0,
-                  totalGB: Util.gigsToBytes(30),
-                  expiryTime: Date.now() + Util.getUnixTimeOf({ days: 30 }),
-                  enable: true,
-                  tgId: userId,
-                  subId: "",
-                  comment: String(userId),
-                  reset: 0,
-                },
-              ],
-            });
-          } else if (type === "450") {
-            settings = JSON.stringify({
-              clients: [
-                {
-                  id: uuid,
-                  flow: "",
-                  email,
-                  limitIp: 0,
-                  totalGB: Util.gigsToBytes(65),
-                  expiryTime: Date.now() + Util.getUnixTimeOf({ days: 30 }),
-                  enable: true,
-                  tgId: userId,
-                  subId: "",
-                  comment: String(userId),
-                  reset: 0,
-                },
-              ],
-            });
-          }
+          const quotaGB = type === "450" ? 65 : 30;
+          const newClient: NewPanelClient = {
+            email,
+            uuid: uuid ?? undefined,
+            flow: "",
+            limitIp: 0,
+            totalGB: Util.gigsToBytes(quotaGB),
+            expiryTime: Date.now() + Util.getUnixTimeOf({ days: 30 }),
+            enable: true,
+            tgId: userId,
+            comment: String(userId),
+            subId: "",
+          };
 
           creatingEmail.delete(userId);
 
-          const body = JSON.stringify({
-            id: Number(WHICH_INBOUND),
-            settings: settings,
-          });
-
-          const url = panel.getAddClientPath(panel.url);
-
-          const req = Util.newPostRequest(url, panel.headers, body);
-
-          const res = await fetch(req);
+          const res = await panel.addClient(Number(WHICH_INBOUND), newClient);
 
           const responseBody = await res.body?.text();
 
-          const { qrFile, configLink } = await genConfig(panel, email, uuid);
-
           if (res.status === 200 && responseBody?.includes("true")) {
+            const createdUUID = uuid ?? "";
+            const { qrFile, configLink } = await genConfig(
+              panel,
+              email,
+              createdUUID,
+            );
             await ctx.api.sendPhoto(userId, qrFile, {
               caption: `اشتراک شما با موفقیت فعال شد ✅\n\nلینک کانفیگ شما 👇\n(برای کپی کردن لینک یک بار روی آن کلیک کنید.)\n\n<code>${configLink}</code>\n\nاگه بلد نیستی از لینک استفاده کنی از دکمه\n"⚙️ آموزش اتصال به کانفیگ" استفاده کن`,
               parse_mode: "HTML",
@@ -419,55 +389,27 @@ export class TelBot {
         return await ctx.answerCallbackQuery({ text: "Panel not found!" });
       }
 
-      let settings = "";
-      if (type === "250") {
-        settings = JSON.stringify({
-          clients: [
-            {
-              id: UUID,
-              flow: "",
-              email,
-              limitIp: 0,
-              totalGB: Util.gigsToBytes(30),
-              expiryTime: Date.now() + Util.getUnixTimeOf({ days: 30 }),
-              enable: true,
-              tgId: userId,
-              subId: "",
-              comment: String(userId),
-              reset: 0,
-            },
-          ],
-        });
-      } else if (type === "450") {
-        settings = JSON.stringify({
-          clients: [
-            {
-              id: UUID,
-              flow: "",
-              email,
-              limitIp: 0,
-              totalGB: Util.gigsToBytes(65),
-              expiryTime: Date.now() + Util.getUnixTimeOf({ days: 30 }),
-              enable: true,
-              tgId: userId,
-              subId: "",
-              comment: String(userId),
-              reset: 0,
-            },
-          ],
-        });
-      }
+      // New API replaces the whole client row: fetch current row first,
+      // then extend expiry (+30d from max(now, current)) and quota.
+      const current = await panel.getClientByEmail(email);
+      const currentObj = current?.obj;
+      const quotaGB = type === "450" ? 65 : 30;
+      const baseExpiry = Math.max(Date.now(), currentObj?.expiryTime ?? 0);
+      const updatedClient: PanelClientPayload = {
+        email,
+        uuid: UUID,
+        flow: "",
+        limitIp: currentObj?.limitIp ?? 0,
+        totalGB:
+          (currentObj?.totalGB ?? 0) + Util.gigsToBytes(quotaGB),
+        expiryTime: baseExpiry + Util.getUnixTimeOf({ days: 30 }),
+        enable: true,
+        tgId: userId,
+        comment: String(userId),
+        subId: currentObj?.subId ?? "",
+      };
 
-      const body = JSON.stringify({
-        id: inboundID,
-        settings: settings,
-      });
-
-      const url = panel.getUpdatePath(panel.url, UUID);
-
-      const req = Util.newPostRequest(url, panel.headers, body);
-
-      const res = await fetch(req);
+      const res = await panel.updateClient(email, updatedClient);
 
       if (res.status === 200) {
         const reset = await panel.resetClientTraffic(inboundID, email);
