@@ -443,12 +443,26 @@ export async function removePanelConv(
 export async function getConfigsPanel(uuid: string, db: DB) {
   const panels = getAllPanels(db);
 
+  // uuid here may be a client UUID (vless/vmess id) or the raw email key.
+  // Prefer the client-centric lookup, fall back to scanning inbounds.
   for (const panel of panels) {
+    const clients = await panel.getClients();
+    if (clients?.success && Array.isArray(clients.obj)) {
+      const found = clients.obj.find(
+        (c) => c.uuid === uuid || c.email === uuid,
+      );
+      if (found) return panel;
+    }
     const inbounds = await panel.getInbounds();
     if (inbounds) {
       for (const bound of inbounds.obj) {
         for (const client of bound.clientStats) {
           if (client.uuid === uuid) {
+            return panel;
+          }
+        }
+        for (const client of bound.settings.clients) {
+          if (client.id === uuid || client.email === uuid) {
             return panel;
           }
         }

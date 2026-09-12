@@ -194,13 +194,28 @@ export class Panel {
     await this.handleLogin();
 
     const inbounds = await this.getInbounds();
+    const clientsRes = await this.getClients();
+    const clientsByEmail = new Map<string, PanelClient>();
+    for (const c of clientsRes?.obj ?? []) {
+      if (c?.email) clientsByEmail.set(c.email, c);
+    }
 
     if (inbounds) {
       let userConfigs: UserConfig[] = [];
 
       for (const obj of inbounds.obj) {
         obj.settings.clients.forEach((client) => {
-          if (userID === Number(client.comment)) {
+          // Owner identity: comment holds the telegram ID; fall back to
+          // tgId and to the email prefix convention (first3ofTgID + 3 digits).
+          const owner =
+            client.comment ?? (client.tgId !== undefined ? String(client.tgId) : "");
+          const emailPrefix = client.email.slice(0, 3);
+          const matches =
+            userID === Number(client.comment) ||
+            (client.tgId !== undefined && Number(client.tgId) === userID) ||
+            String(userID).startsWith(emailPrefix) ||
+            owner === String(userID);
+          if (matches) {
             const stat = obj.clientStats.find(
               (s) => s.uuid === client.id || s.email === client.email,
             );
@@ -211,7 +226,11 @@ export class Panel {
               );
             }
 
-            const used = (stat?.down ?? 0) + (stat?.up ?? 0);
+            const clientRow = clientsByEmail.get(client.email);
+            const used =
+              (clientRow?.traffic
+                ? clientRow.traffic.down + clientRow.traffic.up
+                : (stat?.down ?? 0) + (stat?.up ?? 0));
             const remainingGB = client.totalGB - used;
             const isRenewable =
               (client.expiryTime !== 0 &&
@@ -219,19 +238,19 @@ export class Panel {
                   Util.getUnixTimeOf({ days: 3 })) ||
               (client.totalGB !== 0 && remainingGB <= Util.gigsToBytes(3));
             const inboundRemark = obj.remark;
-            const status = stat?.enable ?? false;
+            const status = clientRow?.traffic?.enable ?? stat?.enable ?? client.enable ?? false;
             const hasStarted = client.expiryTime > 0;
-            const displayEmail = stat?.email ?? client.email ?? "";
+            const displayEmail = clientRow?.email ?? stat?.email ?? client.email ?? "";
             const email = `${status ? (hasStarted ? (isRenewable ? "🟡" : "🟢") : "🟠") : "🔴"} ${inboundRemark}-${displayEmail}`;
 
             userConfigs.push({
               email,
-              inboundID: stat?.inboundId ?? 0,
+              inboundID: clientRow?.inboundIds?.[0] ?? stat?.inboundId ?? obj.id ?? 0,
               inboundRemark,
-              isOff: !client.enable,
+              isOff: !(clientRow?.enable ?? client.enable),
               isRenewable,
               status,
-              uuid: client.id,
+              uuid: clientRow?.uuid ?? client.id,
               hasStarted,
             });
           }
