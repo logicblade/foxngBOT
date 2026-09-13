@@ -29,6 +29,7 @@ import {
   removePanelConv,
   renewCache,
   showPanelsListToAdmin,
+  showUserCountToAdmin,
   state,
   waitingForBroadcast,
   waitingForCreateImage,
@@ -54,6 +55,7 @@ import {
   getConfigBtn,
   backupBtn,
   broadcastBtn,
+  userCountBtn,
 } from "./messages";
 import { adminMenu, mainMenu } from "./keyboards";
 import { PLANS, getPlan, paymentText } from "./plans";
@@ -242,6 +244,16 @@ export class TelBot {
             break;
           }
           await handleBackup(ctx);
+          break;
+
+        case userCountBtn:
+          if (userID !== ADMIN_ID) {
+            await ctx.reply("این حرفا رو از کجا یاد گرفتی؟؟", {
+              reply_markup: mainMenu,
+            });
+            break;
+          }
+          await showUserCountToAdmin(ctx, db);
           break;
 
         case broadcastBtn:

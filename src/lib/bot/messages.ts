@@ -103,6 +103,7 @@ export const changeSellStateBtn = "تغییر وضعیت خرید";
 export const changeRenewStateBtn = "تغییر وضعیت تمدید";
 export const backupBtn = "بکاپ گرفتن از دیتابیس";
 export const broadcastBtn = "📣 پیام همگانی";
+export const userCountBtn = "👥 تعداد کاربران";
 
 export const welcomeAdminTxt = `
 خوش اومدی!

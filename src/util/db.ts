@@ -75,4 +75,11 @@ export class DB {
       .all() as { tg_id: number }[];
     return rows.map((r) => r.tg_id);
   }
+
+  getUserCount(): number {
+    const row = this.db
+      .query("SELECT COUNT(*) AS count FROM users")
+      .get() as { count: number };
+    return row.count;
+  }
 }

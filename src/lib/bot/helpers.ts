@@ -362,6 +362,11 @@ URL: ${cert.url}
   await replyToAdmin(ctx, msg);
 }
 
+export async function showUserCountToAdmin(ctx: Context, db: DB) {
+  const ids = db.getUserIds().filter((id) => id !== ADMIN_ID);
+  await replyToAdmin(ctx, `👥 تعداد کاربرانی که ربات را شروع کرده‌اند: ${ids.length}`);
+}
+
 export async function addPanelConv(conversation: Conversation, ctx: Context) {
   await ctx.reply(`
 خب آدرس پنل رو بده بهم:
