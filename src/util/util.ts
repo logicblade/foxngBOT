@@ -62,12 +62,16 @@ export class Util {
   }
 
   /**
-   * Display remaining quota for the status message.
-   * - If remaining < total / 3, show the actual remaining.
-   * - Otherwise show remaining + bonus. When the accumulated bonus is
-   *   known (stored per client, covering stacked renewals) pass it in;
-   *   otherwise it is inferred from the total (exact grant decomposition,
-   *   single-plan bucket fallback).
+   * Display remaining quota for the status message (smooth fade, no jumps).
+   * - At full quota (remaining == total granted) shows the title GBs
+   *   (remaining + full bonus).
+   * - The bonus then fades linearly to 0 as the ACTUAL remaining drops to
+   *   5GB: display = remaining + bonus * (remaining - 5) / (total - 5).
+   * - At/below 5GB actual remaining shows the actual remaining (0% bonus),
+   *   matching the 5GB low-quota notify threshold.
+   * When the accumulated bonus is known (stored per client, covering
+   * stacked renewals) pass it in; otherwise it is inferred from the total
+   * (exact grant decomposition, single-plan bucket fallback).
    */
   public static displayRemainingGB(
     totalBytes: number,
@@ -77,9 +81,17 @@ export class Util {
     const total = Math.max(0, totalBytes);
     const remaining = Math.max(0, remainingBytes);
     if (total === 0) return this.bytesToGigs(remaining);
-    if (remaining < total / 3) return this.bytesToGigs(remaining);
     const bonus = bonusGB ?? this.inferBonusGB(total);
-    return this.bytesToGigs(remaining) + Math.max(0, bonus);
+    const bonusBytes = Math.max(0, bonus) * 1073741824;
+    if (bonusBytes === 0) return this.bytesToGigs(remaining);
+    const floorBytes = this.gigsToBytes(5);
+    if (remaining <= floorBytes) return this.bytesToGigs(remaining);
+    if (total <= floorBytes) return this.bytesToGigs(remaining);
+    const fraction = Math.min(
+      1,
+      Math.max(0, (remaining - floorBytes) / (total - floorBytes)),
+    );
+    return this.bytesToGigs(remaining + bonusBytes * fraction);
   }
 
   public static formatGB(gb: number) {
