@@ -321,7 +321,12 @@ export async function handleCheckAccount(ctx: Context, db: DB) {
       const displayGB = Util.formatGB(
         Util.displayRemainingGB(conf.totalGB, conf.remainingGB),
       );
-      statusTxt += `${conf.status ? (conf.isRenewable ? "🟡" : "🟢") : "🔴"} ${email} - ${conf.status ? (conf.isRenewable ? "رو به اتمام" : "فعال") : "به اتمام رسیده"} - مانده: ${displayGB} گیگابایت\n`;
+      const statusWord = conf.status
+        ? conf.isRenewable
+          ? "رو به اتمام"
+          : "فعال"
+        : "به اتمام رسیده";
+      statusTxt += `${conf.status ? (conf.isRenewable ? "🟡" : "🟢") : "🔴"} ${email} - ${statusWord}\nمانده: ${displayGB} گیگابایت\n\n`;
     }
 
     await ctx.reply(statusTxt, { reply_markup: mainMenu });
