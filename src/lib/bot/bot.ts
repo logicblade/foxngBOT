@@ -29,6 +29,7 @@ import {
   removePanelConv,
   renewCache,
   showPanelsListToAdmin,
+  showUserCountToAdmin,
   state,
   waitingForBroadcast,
   waitingForCreateImage,
@@ -54,6 +55,7 @@ import {
   getConfigBtn,
   backupBtn,
   broadcastBtn,
+  userCountBtn,
 } from "./messages";
 import { adminMenu, mainMenu } from "./keyboards";
 import { PLANS, getPlan, paymentText } from "./plans";
@@ -244,6 +246,16 @@ export class TelBot {
           await handleBackup(ctx);
           break;
 
+        case userCountBtn:
+          if (userID !== ADMIN_ID) {
+            await ctx.reply("این حرفا رو از کجا یاد گرفتی؟؟", {
+              reply_markup: mainMenu,
+            });
+            break;
+          }
+          await showUserCountToAdmin(ctx, db);
+          break;
+
         case broadcastBtn:
           if (userID !== ADMIN_ID) {
             await ctx.reply("این حرفا رو از کجا یاد گرفتی؟؟", {
@@ -366,6 +378,9 @@ export class TelBot {
         }
 
         // The panel's stored uuid is the source of truth for the config link.
+        // Seed the display bonus (title GB minus granted GB) for the status view.
+        db.setClientBonus(added.uuid, plan.titleGB - plan.grantGB);
+
         let qrFile: InputFile;
         let configLink: string;
         try {
@@ -423,18 +438,13 @@ export class TelBot {
         pendingConfigType.delete(userId);
 
         const configs = renewCache[userId]?.filter(
-          (v) =>
-            (v.isRenewable && v.uuid === UUID) ||
-            (v.status === false && v.uuid === UUID),
+          (v) => v.uuid === UUID,
         );
         const rawEmail = configs?.at(0)?.email;
         if (!rawEmail) {
           console.error(`renewAccept: no cached config for uuid=${UUID}`);
           return await ctx.reply("خطا: اشتراک در کش پیدا نشد!");
         }
-
-        const emailParts = Util.removeEmoji(rawEmail).split("-");
-        const email = emailParts.slice(1).join("-");
 
         console.log("the UUID:", UUID);
 
@@ -443,22 +453,68 @@ export class TelBot {
           return await ctx.answerCallbackQuery({ text: "Panel not found!" });
         }
 
-        // New API replaces the whole client row: fetch current row first,
-        // then add quota. Expiry stays unlimited (0 = never expires).
-        const current = await panel.getClientByEmail(email);
-        const currentObj = current?.obj;
+        // ADD the new quota to the ALREADY REMAINING quota:
+        // newTotal = remaining + grant. Traffic is reset afterwards, so the
+        // post-reset remaining equals newTotal (old remainder is preserved).
+        // The client row is resolved by UUID (not by parsing the display
+        // email, which breaks when inbound remarks contain dashes) so the
+        // current quota is read reliably and never silently replaced.
+        // Expiry stays unlimited (0 = never expires).
+        const parsedParts = Util.removeEmoji(rawEmail).split("-");
+        const parsedEmail = parsedParts.slice(1).join("-");
+
+        let row = await panel.findClientByUUID(UUID);
+        if (!row && parsedEmail) {
+          const current = await panel.getClientByEmail(parsedEmail);
+          const obj = current?.obj;
+          row = Array.isArray(obj) ? obj[0] : obj;
+        }
+        if (!row) {
+          console.error(
+            `renewAccept: client row not found uuid=${UUID} email=${parsedEmail}`,
+          );
+          return await ctx.reply("خطا: اشتراک در پنل پیدا نشد!");
+        }
+        const email = row.email;
+        // Coerce: the panel may serialize big counters as strings, and plain
+        // `+` on strings concatenates (huge `used` -> zero remaining -> the
+        // renew looks like a replace instead of an add).
+        const num = (v: unknown) => {
+          const n = Number(v ?? 0);
+          return Number.isFinite(n) ? n : 0;
+        };
+        const currentTotal: number = num(row?.totalGB);
+        const traffic = row?.traffic;
+        const currentUsed: number = traffic
+          ? num(traffic.up) + num(traffic.down)
+          : num((row as PanelClient)?.up) + num((row as PanelClient)?.down);
+        const currentRemaining =
+          currentTotal === 0
+            ? 0
+            : Math.max(0, currentTotal - currentUsed);
+        const newTotalGB =
+          currentTotal === 0
+            ? Util.gigsToBytes(plan.grantGB)
+            : currentRemaining + Util.gigsToBytes(plan.grantGB);
+        // Accrue the display bonus (title minus grant) so the status view
+        // keeps showing title GBs across stacked renewals.
+        const prevBonus =
+          db.getClientBonus(UUID) ?? Util.inferBonusGB(currentTotal);
+        const newBonus = prevBonus + (plan.titleGB - plan.grantGB);
+        console.log(
+          `renewAccept: ${email} total=${currentTotal} used=${currentUsed} remaining=${currentRemaining} grant=${plan.grantGB}GB newTotal=${newTotalGB} bonus=${prevBonus}->${newBonus}`,
+        );
         const updatedClient: PanelClientPayload = {
           email,
           uuid: UUID,
           flow: "",
-          limitIp: currentObj?.limitIp ?? 0,
-          totalGB:
-            (currentObj?.totalGB ?? 0) + Util.gigsToBytes(plan.grantGB),
+          limitIp: row?.limitIp ?? 0,
+          totalGB: newTotalGB,
           expiryTime: 0,
           enable: true,
           tgId: userId,
           comment: String(userId),
-          subId: currentObj?.subId ?? "",
+          subId: row?.subId ?? "",
         };
 
         let res: Response;
@@ -470,6 +526,7 @@ export class TelBot {
         }
 
         if (res.status === 200) {
+          db.setClientBonus(UUID, newBonus);
           const reset = await panel.resetClientTraffic(inboundID, email);
           if (reset) {
             await ctx.api.sendMessage(userId, "اشتراک شما با موفقیت فعال شد ✅");

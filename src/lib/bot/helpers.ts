@@ -6,9 +6,6 @@ import {
   noSubFoundTxt,
   reciptReceiveTxt,
   searchingTxt,
-  statusEnabledTxt,
-  statusNotStartedtxt,
-  statusOffTxt,
   subFoundGetConfTxt,
   subFoundTxt,
   welcomeAdminTxt,
@@ -92,11 +89,7 @@ export async function handleImagesIncome(ctx: Context) {
       pendingRenewals.set(userID, { photoFileID: photo.file_id });
 
       const uuid = pendingConfig.get(userID)?.UUID!;
-      const configs = renewCache[userID]?.filter(
-        (v) =>
-          (v.isRenewable && v.uuid === uuid) ||
-          (v.status === false && v.uuid === uuid),
-      );
+      const configs = renewCache[userID]?.filter((v) => v.uuid === uuid);
       const email = Util.removeEmoji(configs?.at(0)?.email!);
       const type = pendingConfigType.get(userID)!;
 
@@ -153,27 +146,18 @@ export const handleRenewCallback = async (ctx: Context) => {
   if (!configs) return;
 
   const selected = configs[index];
+  if (!selected) {
+    await ctx.answerCallbackQuery();
+    return;
+  }
 
   await ctx.deleteMessage();
 
-  if (selected?.status && !selected.isRenewable) {
-    await ctx.reply(statusEnabledTxt);
-    await ctx.answerCallbackQuery();
-    return;
-  } else if (!selected?.hasStarted) {
-    await ctx.reply(statusNotStartedtxt);
-    await ctx.answerCallbackQuery();
-    return;
-  } else if (selected.isOff) {
-    await ctx.reply(statusOffTxt);
-    await ctx.answerCallbackQuery();
-    return;
-  } else {
-    pendingConfig.set(userID, {
-      UUID: selected?.uuid!,
-      inboundID: selected?.inboundID!,
-    });
-  }
+  // Renewals are always allowed: quota is added to the remaining quota.
+  pendingConfig.set(userID, {
+    UUID: selected?.uuid!,
+    inboundID: selected?.inboundID!,
+  });
 
   await ctx.reply(
     `لطفا نوع اشتراک خود را انتخاب کنید:
@@ -334,7 +318,16 @@ export async function handleCheckAccount(ctx: Context, db: DB) {
 
     for (const conf of configs) {
       const email = Util.removeEmoji(conf.email);
-      statusTxt += `${conf.status ? (conf.isRenewable ? "🟡" : "🟢") : "🔴"} ${email} - ${conf.status ? (conf.isRenewable ? "رو به اتمام" : "فعال") : "به اتمام رسیده"}\n`;
+      const bonus = db.getClientBonus(conf.uuid) ?? Util.inferBonusGB(conf.totalGB);
+      const displayGB = Util.formatGB(
+        Util.displayRemainingGB(conf.totalGB, conf.remainingGB, bonus),
+      );
+      const statusWord = conf.status
+        ? conf.isRenewable
+          ? "رو به اتمام"
+          : "فعال"
+        : "به اتمام رسیده";
+      statusTxt += `${conf.status ? (conf.isRenewable ? "🟡" : "🟢") : "🔴"} ${email} - ${statusWord}\nمانده: ${displayGB} گیگابایت\n\n`;
     }
 
     await ctx.reply(statusTxt, { reply_markup: mainMenu });
@@ -373,6 +366,11 @@ URL: ${cert.url}
   );
 
   await replyToAdmin(ctx, msg);
+}
+
+export async function showUserCountToAdmin(ctx: Context, db: DB) {
+  const ids = db.getUserIds().filter((id) => id !== ADMIN_ID);
+  await replyToAdmin(ctx, `👥 تعداد کاربرانی که ربات را شروع کرده‌اند: ${ids.length}`);
 }
 
 export async function addPanelConv(conversation: Conversation, ctx: Context) {

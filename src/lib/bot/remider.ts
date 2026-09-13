@@ -3,10 +3,9 @@ import type { DB } from "../../util/db";
 import { Util } from "../../util/util";
 import { getAllPanels } from "../panel/panel";
 
-async function getExpiringClients(db: DB) {
+async function getLowQuotaClients(db: DB) {
   const panels = getAllPanels(db);
 
-  const clientsDate: ExpiryCheckUser[] = [];
   const clientsTraffic: ExpiryCheckUser[] = [];
 
   for (const panel of panels) {
@@ -24,7 +23,6 @@ async function getExpiringClients(db: DB) {
     );
 
     if (inbounds) {
-      const usersDate: ExpiryCheckUser[] = [];
       const usersTraffic: ExpiryCheckUser[] = [];
 
       for (const obj of inbounds.obj) {
@@ -39,20 +37,10 @@ async function getExpiringClients(db: DB) {
           };
           const used = counters.down + counters.up;
           const remainingGB = client.totalGB - used;
-          const now = Date.now();
 
+          // Subscriptions are time-unlimited: only quota matters.
           if (
-            client.expiryTime - now <= Util.getUnixTimeOf({ days: 2 }) &&
-            client.expiryTime !== 0 &&
-            client.enable
-          ) {
-            usersDate.push({
-              email: client.email,
-              tgID: client.tgId || client.comment,
-              remark: obj.remark,
-            });
-          } else if (
-            remainingGB <= Util.gigsToBytes(2) &&
+            remainingGB <= Util.gigsToBytes(5) &&
             client.totalGB !== 0 &&
             client.enable
           ) {
@@ -65,31 +53,15 @@ async function getExpiringClients(db: DB) {
         });
       }
 
-      if (usersDate.length > 0) clientsDate.push(...usersDate);
       if (usersTraffic.length > 0) clientsTraffic.push(...usersTraffic);
     }
   }
 
-  return { clientsDate, clientsTraffic };
+  return { clientsTraffic };
 }
 
 export async function informUserExpiry(db: DB) {
-  const { clientsDate, clientsTraffic } = await getExpiringClients(db);
-
-  clientsDate.forEach(async (client) => {
-    await bot.bot.api.sendMessage(
-      client.tgID,
-      `
-⚠️ کاربر گرامی ⚠️
-
-‼️ از سرویس اشتراک "${client.remark}-${client.email}"
-(کمتر از 2 روز) باقی مانده است.
-
-میتوانید از قسمت "♻️ تمدید اشتراک" 
-اشتراک خود را تمدید کنید✅
-        `,
-    );
-  });
+  const { clientsTraffic } = await getLowQuotaClients(db);
 
   clientsTraffic.forEach(async (client) => {
     await bot.bot.api.sendMessage(
@@ -98,7 +70,7 @@ export async function informUserExpiry(db: DB) {
 ⚠️ کاربر گرامی ⚠️
 
 ‼️ از سرویس اشتراک "${client.remark}-${client.email}"
-(کمتر از 2 گیگابایت) باقی مانده است.
+(کمتر از 5 گیگابایت) باقی مانده است.
 
 میتوانید از قسمت "♻️ تمدید اشتراک"
 اشتراک خود را تمدید کنید✅

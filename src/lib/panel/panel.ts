@@ -257,6 +257,22 @@ export class Panel {
     return { ok: false, status: res.status, body: text.slice(0, 500) };
   }
 
+  /** Finds a client row by its vless/vmess credential (uuid), scanning the list. */
+  async findClientByUUID(uuid: string): Promise<PanelClient | undefined> {
+    try {
+      const list = await this.getClients();
+      const rows = Array.isArray(list?.obj) ? list.obj : [];
+      return rows.find(
+        (r) =>
+          Panel.extractClientUuid(r) === uuid ||
+          r?.email === uuid,
+      );
+    } catch (error) {
+      console.error("findClientByUUID failed:", error);
+      return undefined;
+    }
+  }
+
   /** Pulls the vless/vmess credential off a stored client row. */
   private static extractClientUuid(
     row: PanelClient | undefined | null,
@@ -358,6 +374,8 @@ export class Panel {
               status,
               uuid: clientRow?.uuid ?? client.id,
               hasStarted,
+              totalGB: client.totalGB,
+              remainingGB: Math.max(0, remainingGB),
             });
           }
         });

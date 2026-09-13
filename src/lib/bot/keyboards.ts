@@ -15,6 +15,7 @@ import {
   getConfigBtn,
   backupBtn,
   broadcastBtn,
+  userCountBtn,
 } from "./messages";
 import { PLANS } from "./plans";
 
@@ -63,6 +64,7 @@ export const adminMenu = new Keyboard()
   .text(broadcastBtn)
   .row()
   .text(backupBtn)
+  .text(userCountBtn)
   .resized();
 
 export const broadcastConfirmMenu = (pendingCount: number) =>

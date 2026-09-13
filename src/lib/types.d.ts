@@ -115,6 +115,8 @@ interface UserConfig {
   isRenewable: boolean;
   isOff: boolean;
   hasStarted: boolean;
+  totalGB: number;
+  remainingGB: number;
 }
 
 interface ExpiryCheckUser {

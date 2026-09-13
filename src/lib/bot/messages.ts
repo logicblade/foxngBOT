@@ -43,11 +43,8 @@ export const noSubFoundTxt = `
 export const subFoundTxt = `
 اشتراکی که میخوای تمدید کنی انتخاب کن: 👇🚀
 
-⚠️توجه: فقط اشتراک هایی که حجمشون رو به اتمامه یا تموم شده قابل تمدیدن!
-
 🟢: اشتراک فعال
 🟡: اشتراک فعال ولی حجمش رو به اتمامه
-🟠: تا حالا به اشتراک وصل نشدی
 🔴: حجم اشتراک به اتمام رسیده
 `;
 export const subFoundGetConfTxt = `
@@ -106,6 +103,7 @@ export const changeSellStateBtn = "تغییر وضعیت خرید";
 export const changeRenewStateBtn = "تغییر وضعیت تمدید";
 export const backupBtn = "بکاپ گرفتن از دیتابیس";
 export const broadcastBtn = "📣 پیام همگانی";
+export const userCountBtn = "👥 تعداد کاربران";
 
 export const welcomeAdminTxt = `
 خوش اومدی!
