@@ -6,9 +6,6 @@ import {
   noSubFoundTxt,
   reciptReceiveTxt,
   searchingTxt,
-  statusEnabledTxt,
-  statusNotStartedtxt,
-  statusOffTxt,
   subFoundGetConfTxt,
   subFoundTxt,
   welcomeAdminTxt,
@@ -92,11 +89,7 @@ export async function handleImagesIncome(ctx: Context) {
       pendingRenewals.set(userID, { photoFileID: photo.file_id });
 
       const uuid = pendingConfig.get(userID)?.UUID!;
-      const configs = renewCache[userID]?.filter(
-        (v) =>
-          (v.isRenewable && v.uuid === uuid) ||
-          (v.status === false && v.uuid === uuid),
-      );
+      const configs = renewCache[userID]?.filter((v) => v.uuid === uuid);
       const email = Util.removeEmoji(configs?.at(0)?.email!);
       const type = pendingConfigType.get(userID)!;
 
@@ -153,27 +146,18 @@ export const handleRenewCallback = async (ctx: Context) => {
   if (!configs) return;
 
   const selected = configs[index];
+  if (!selected) {
+    await ctx.answerCallbackQuery();
+    return;
+  }
 
   await ctx.deleteMessage();
 
-  if (selected?.status && !selected.isRenewable) {
-    await ctx.reply(statusEnabledTxt);
-    await ctx.answerCallbackQuery();
-    return;
-  } else if (!selected?.hasStarted) {
-    await ctx.reply(statusNotStartedtxt);
-    await ctx.answerCallbackQuery();
-    return;
-  } else if (selected.isOff) {
-    await ctx.reply(statusOffTxt);
-    await ctx.answerCallbackQuery();
-    return;
-  } else {
-    pendingConfig.set(userID, {
-      UUID: selected?.uuid!,
-      inboundID: selected?.inboundID!,
-    });
-  }
+  // Renewals are always allowed: quota is added to the remaining quota.
+  pendingConfig.set(userID, {
+    UUID: selected?.uuid!,
+    inboundID: selected?.inboundID!,
+  });
 
   await ctx.reply(
     `لطفا نوع اشتراک خود را انتخاب کنید:

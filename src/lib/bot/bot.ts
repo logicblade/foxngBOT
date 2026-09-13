@@ -423,9 +423,7 @@ export class TelBot {
         pendingConfigType.delete(userId);
 
         const configs = renewCache[userId]?.filter(
-          (v) =>
-            (v.isRenewable && v.uuid === UUID) ||
-            (v.status === false && v.uuid === UUID),
+          (v) => v.uuid === UUID,
         );
         const rawEmail = configs?.at(0)?.email;
         if (!rawEmail) {
@@ -444,21 +442,35 @@ export class TelBot {
         }
 
         // New API replaces the whole client row: fetch current row first,
-        // then add quota. Expiry stays unlimited (0 = never expires).
+        // then add the new quota to the ALREADY REMAINING quota.
+        // Traffic is reset afterwards, so new total = remaining + grant.
+        // Expiry stays unlimited (0 = never expires).
         const current = await panel.getClientByEmail(email);
         const currentObj = current?.obj;
+        const row = Array.isArray(currentObj) ? currentObj[0] : currentObj;
+        const currentTotal: number = row?.totalGB ?? 0;
+        const currentUsed: number = row?.traffic
+          ? (row.traffic.up ?? 0) + (row.traffic.down ?? 0)
+          : ((row?.up ?? 0) + (row?.down ?? 0));
+        const currentRemaining =
+          currentTotal === 0
+            ? 0
+            : Math.max(0, currentTotal - currentUsed);
+        const newTotalGB =
+          currentTotal === 0
+            ? Util.gigsToBytes(plan.grantGB)
+            : currentRemaining + Util.gigsToBytes(plan.grantGB);
         const updatedClient: PanelClientPayload = {
           email,
           uuid: UUID,
           flow: "",
-          limitIp: currentObj?.limitIp ?? 0,
-          totalGB:
-            (currentObj?.totalGB ?? 0) + Util.gigsToBytes(plan.grantGB),
+          limitIp: row?.limitIp ?? 0,
+          totalGB: newTotalGB,
           expiryTime: 0,
           enable: true,
           tgId: userId,
           comment: String(userId),
-          subId: currentObj?.subId ?? "",
+          subId: row?.subId ?? "",
         };
 
         let res: Response;
