@@ -22,6 +22,13 @@ export class DB {
     last_seen INTEGER NOT NULL
   )
 `);
+
+    this.db.run(`
+  CREATE TABLE IF NOT EXISTS client_bonus (
+    uuid TEXT PRIMARY KEY,
+    bonus_gb INTEGER NOT NULL
+  )
+`);
   }
 
   addPanel(url: string, name: string, username: string, password: string) {
@@ -81,5 +88,21 @@ export class DB {
       .query("SELECT COUNT(*) AS count FROM users")
       .get() as { count: number };
     return row.count;
+  }
+
+  /** Display bonus (title GB minus granted GB, accumulated over renewals). */
+  getClientBonus(uuid: string): number | null {
+    const row = this.db
+      .query("SELECT bonus_gb AS bonus FROM client_bonus WHERE uuid = ?")
+      .get(uuid) as { bonus: number } | null;
+    return row ? row.bonus : null;
+  }
+
+  setClientBonus(uuid: string, bonusGB: number) {
+    this.db.run(
+      `INSERT INTO client_bonus (uuid, bonus_gb) VALUES (?, ?)
+       ON CONFLICT(uuid) DO UPDATE SET bonus_gb = excluded.bonus_gb`,
+      [uuid, bonusGB],
+    );
   }
 }
