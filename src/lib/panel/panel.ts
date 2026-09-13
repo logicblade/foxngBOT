@@ -358,6 +358,8 @@ export class Panel {
               status,
               uuid: clientRow?.uuid ?? client.id,
               hasStarted,
+              totalGB: client.totalGB,
+              remainingGB: Math.max(0, remainingGB),
             });
           }
         });

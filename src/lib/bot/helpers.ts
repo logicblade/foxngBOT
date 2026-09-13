@@ -334,7 +334,10 @@ export async function handleCheckAccount(ctx: Context, db: DB) {
 
     for (const conf of configs) {
       const email = Util.removeEmoji(conf.email);
-      statusTxt += `${conf.status ? (conf.isRenewable ? "🟡" : "🟢") : "🔴"} ${email} - ${conf.status ? (conf.isRenewable ? "رو به اتمام" : "فعال") : "به اتمام رسیده"}\n`;
+      const displayGB = Util.formatGB(
+        Util.displayRemainingGB(conf.totalGB, conf.remainingGB),
+      );
+      statusTxt += `${conf.status ? (conf.isRenewable ? "🟡" : "🟢") : "🔴"} ${email} - ${conf.status ? (conf.isRenewable ? "رو به اتمام" : "فعال") : "به اتمام رسیده"} - مانده: ${displayGB} گیگابایت\n`;
     }
 
     await ctx.reply(statusTxt, { reply_markup: mainMenu });
