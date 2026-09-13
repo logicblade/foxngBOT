@@ -9,7 +9,7 @@ fi
 
 ### ===== CONFIG =====
 REPO_URL="https://github.com/logicblade/sh-bot.git"
-APP_NAME="FoxNG"
+APP_NAME="FoxNGBot"
 INSTALL_DIR="/opt/$APP_NAME"
 SERVICE_NAME="$APP_NAME.service"
 ### ==================
