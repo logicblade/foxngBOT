@@ -318,8 +318,9 @@ export async function handleCheckAccount(ctx: Context, db: DB) {
 
     for (const conf of configs) {
       const email = Util.removeEmoji(conf.email);
+      const bonus = db.getClientBonus(conf.uuid) ?? Util.inferBonusGB(conf.totalGB);
       const displayGB = Util.formatGB(
-        Util.displayRemainingGB(conf.totalGB, conf.remainingGB),
+        Util.displayRemainingGB(conf.totalGB, conf.remainingGB, bonus),
       );
       const statusWord = conf.status
         ? conf.isRenewable

@@ -378,6 +378,9 @@ export class TelBot {
         }
 
         // The panel's stored uuid is the source of truth for the config link.
+        // Seed the display bonus (title GB minus granted GB) for the status view.
+        db.setClientBonus(added.uuid, plan.titleGB - plan.grantGB);
+
         let qrFile: InputFile;
         let configLink: string;
         try {
@@ -473,10 +476,18 @@ export class TelBot {
           return await ctx.reply("خطا: اشتراک در پنل پیدا نشد!");
         }
         const email = row.email;
-        const currentTotal: number = row?.totalGB ?? 0;
-        const currentUsed: number = row?.traffic
-          ? ((row.traffic.up ?? 0) + (row.traffic.down ?? 0))
-          : (((row as PanelClient)?.up ?? 0) + ((row as PanelClient)?.down ?? 0));
+        // Coerce: the panel may serialize big counters as strings, and plain
+        // `+` on strings concatenates (huge `used` -> zero remaining -> the
+        // renew looks like a replace instead of an add).
+        const num = (v: unknown) => {
+          const n = Number(v ?? 0);
+          return Number.isFinite(n) ? n : 0;
+        };
+        const currentTotal: number = num(row?.totalGB);
+        const traffic = row?.traffic;
+        const currentUsed: number = traffic
+          ? num(traffic.up) + num(traffic.down)
+          : num((row as PanelClient)?.up) + num((row as PanelClient)?.down);
         const currentRemaining =
           currentTotal === 0
             ? 0
@@ -485,8 +496,13 @@ export class TelBot {
           currentTotal === 0
             ? Util.gigsToBytes(plan.grantGB)
             : currentRemaining + Util.gigsToBytes(plan.grantGB);
+        // Accrue the display bonus (title minus grant) so the status view
+        // keeps showing title GBs across stacked renewals.
+        const prevBonus =
+          db.getClientBonus(UUID) ?? Util.inferBonusGB(currentTotal);
+        const newBonus = prevBonus + (plan.titleGB - plan.grantGB);
         console.log(
-          `renewAccept: ${email} total=${currentTotal} used=${currentUsed} remaining=${currentRemaining} grant=${plan.grantGB}GB newTotal=${newTotalGB}`,
+          `renewAccept: ${email} total=${currentTotal} used=${currentUsed} remaining=${currentRemaining} grant=${plan.grantGB}GB newTotal=${newTotalGB} bonus=${prevBonus}->${newBonus}`,
         );
         const updatedClient: PanelClientPayload = {
           email,
@@ -510,6 +526,7 @@ export class TelBot {
         }
 
         if (res.status === 200) {
+          db.setClientBonus(UUID, newBonus);
           const reset = await panel.resetClientTraffic(inboundID, email);
           if (reset) {
             await ctx.api.sendMessage(userId, "اشتراک شما با موفقیت فعال شد ✅");
