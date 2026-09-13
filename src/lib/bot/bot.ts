@@ -443,9 +443,6 @@ export class TelBot {
           return await ctx.reply("خطا: اشتراک در کش پیدا نشد!");
         }
 
-        const emailParts = Util.removeEmoji(rawEmail).split("-");
-        const email = emailParts.slice(1).join("-");
-
         console.log("the UUID:", UUID);
 
         const panel = await getConfigsPanel(UUID, db);
@@ -453,17 +450,33 @@ export class TelBot {
           return await ctx.answerCallbackQuery({ text: "Panel not found!" });
         }
 
-        // New API replaces the whole client row: fetch current row first,
-        // then add the new quota to the ALREADY REMAINING quota.
-        // Traffic is reset afterwards, so new total = remaining + grant.
+        // ADD the new quota to the ALREADY REMAINING quota:
+        // newTotal = remaining + grant. Traffic is reset afterwards, so the
+        // post-reset remaining equals newTotal (old remainder is preserved).
+        // The client row is resolved by UUID (not by parsing the display
+        // email, which breaks when inbound remarks contain dashes) so the
+        // current quota is read reliably and never silently replaced.
         // Expiry stays unlimited (0 = never expires).
-        const current = await panel.getClientByEmail(email);
-        const currentObj = current?.obj;
-        const row = Array.isArray(currentObj) ? currentObj[0] : currentObj;
+        const parsedParts = Util.removeEmoji(rawEmail).split("-");
+        const parsedEmail = parsedParts.slice(1).join("-");
+
+        let row = await panel.findClientByUUID(UUID);
+        if (!row && parsedEmail) {
+          const current = await panel.getClientByEmail(parsedEmail);
+          const obj = current?.obj;
+          row = Array.isArray(obj) ? obj[0] : obj;
+        }
+        if (!row) {
+          console.error(
+            `renewAccept: client row not found uuid=${UUID} email=${parsedEmail}`,
+          );
+          return await ctx.reply("خطا: اشتراک در پنل پیدا نشد!");
+        }
+        const email = row.email;
         const currentTotal: number = row?.totalGB ?? 0;
         const currentUsed: number = row?.traffic
-          ? (row.traffic.up ?? 0) + (row.traffic.down ?? 0)
-          : ((row?.up ?? 0) + (row?.down ?? 0));
+          ? ((row.traffic.up ?? 0) + (row.traffic.down ?? 0))
+          : (((row as PanelClient)?.up ?? 0) + ((row as PanelClient)?.down ?? 0));
         const currentRemaining =
           currentTotal === 0
             ? 0
@@ -472,6 +485,9 @@ export class TelBot {
           currentTotal === 0
             ? Util.gigsToBytes(plan.grantGB)
             : currentRemaining + Util.gigsToBytes(plan.grantGB);
+        console.log(
+          `renewAccept: ${email} total=${currentTotal} used=${currentUsed} remaining=${currentRemaining} grant=${plan.grantGB}GB newTotal=${newTotalGB}`,
+        );
         const updatedClient: PanelClientPayload = {
           email,
           uuid: UUID,
