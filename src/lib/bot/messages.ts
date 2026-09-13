@@ -45,7 +45,6 @@ export const subFoundTxt = `
 
 🟢: اشتراک فعال
 🟡: اشتراک فعال ولی حجمش رو به اتمامه
-🟠: تا حالا به اشتراک وصل نشدی
 🔴: حجم اشتراک به اتمام رسیده
 `;
 export const subFoundGetConfTxt = `
