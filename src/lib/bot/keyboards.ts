@@ -50,6 +50,32 @@ export const cancelMenu = new InlineKeyboard().text(cancelBtn, "order:cancel");
 
 export const backHomeMenu = new InlineKeyboard().text(resetBtn, "menu:home");
 
+type InlineReplyMarkup = {
+  inline_keyboard: Array<Array<{ callback_data?: string } & Record<string, unknown>>>;
+};
+
+/** Adds the shared home action without changing an existing keyboard instance. */
+export function withBackHomeButton(
+  replyMarkup?: InlineReplyMarkup | InlineKeyboard,
+): InlineReplyMarkup {
+  const markup = replyMarkup
+    ? (replyMarkup as InlineReplyMarkup)
+    : { inline_keyboard: [] };
+  const hasHomeButton = markup.inline_keyboard.some((row) =>
+    row.some((button) => button.callback_data === "menu:home"),
+  );
+
+  if (hasHomeButton) return markup;
+
+  return {
+    ...markup,
+    inline_keyboard: [
+      ...markup.inline_keyboard.map((row) => [...row]),
+      [{ text: resetBtn, callback_data: "menu:home" }],
+    ],
+  };
+}
+
 export const adminMenu = (isOwner: boolean) => {
   const kb = new InlineKeyboard()
     .text(myPanelsBtn, "admin:panels")
