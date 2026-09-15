@@ -5,7 +5,6 @@ import {
   bigGreet,
   disableRenewTxt,
   disableSellTxt,
-  greet,
   justImageTxt,
   noSubFoundTxt,
   planFeaturesNote,
@@ -14,11 +13,9 @@ import {
   subFoundGetConfTxt,
   subFoundTxt,
   welcomeAdminTxt,
-  resetBtn,
-  cancelBtn,
 } from "./messages";
-import { adminMenu, adminsMenu, backHomeMenu, broadcastConfirmMenu, cancelMenu, mainMenu, removeReplyKeyboard, renewMenu, subAdminMenu } from "./keyboards";
-import { PLANS, getPlan, paymentText } from "./plans";
+import { adminMenu, adminsMenu, backHomeMenu, broadcastConfirmMenu, cancelMenu, mainMenu, renewMenu, subAdminMenu } from "./keyboards";
+import { getPlan, paymentText } from "./plans";
 import type { DB } from "../../util/db";
 import { db, WHICH_INBOUND } from "../..";
 import { getAllPanels, Panel } from "../panel/panel";
@@ -69,13 +66,9 @@ export const state: State = {
 export async function handleStartCommandForUser(ctx: Context, db: DB) {
   const init = db.getPanels().length !== 0;
   if (!init) {
-    await ctx.reply("ربات هنوز توسط ادمین راه اندازی نشده است...", {
-      reply_markup: removeReplyKeyboard,
-    });
+    await ctx.reply("ربات هنوز توسط ادمین راه اندازی نشده است...");
     return;
   }
-  // Remove any legacy reply keyboard first, then show the inline main menu.
-  await ctx.reply(greet, { reply_markup: removeReplyKeyboard });
   await ctx.reply(bigGreet(ctx.from?.first_name), { reply_markup: mainMenu });
 }
 
@@ -286,13 +279,16 @@ export const handleRenewDeclineCallback = async (ctx: Context, db: DB) => {
 با آیدی پشتیبانی در ارتباط باشید👇🏼
 
 🆔: @foxngsup`,
+    { reply_markup: mainMenu },
   );
   await notifyOtherReviewers(
     ctx,
     db,
     `❌ درخواست تمدید کاربر ${userId} توسط ${formatAdminTag(ctx)} رد شد.`,
   );
-  await ctx.reply("رد شد ❌");
+  await ctx.reply("رد شد ❌", {
+    reply_markup: isOwner(ctx.from?.id) ? adminMenu(true) : subAdminMenu,
+  });
   await ctx.answerCallbackQuery();
 };
 
@@ -316,13 +312,16 @@ export const handleCreateDeclineCallback = async (ctx: Context, db: DB) => {
 با آیدی پشتیبانی در ارتباط باشید👇🏼
 
 🆔: @foxngsup`,
+    { reply_markup: mainMenu },
   );
   await notifyOtherReviewers(
     ctx,
     db,
     `❌ درخواست خرید کاربر ${userId} توسط ${formatAdminTag(ctx)} رد شد.`,
   );
-  await ctx.reply("رد شد ❌");
+  await ctx.reply("رد شد ❌", {
+    reply_markup: isOwner(ctx.from?.id) ? adminMenu(true) : subAdminMenu,
+  });
   await ctx.answerCallbackQuery();
 };
 
@@ -403,15 +402,13 @@ export async function handleCreateAccount(ctx: Context) {
   );
 }
 
-/** Shared plan selection for both buy and renew flows (text + callback). */
+/** Shared plan selection for both buy and renew flows (inline plan:* buttons). */
 export async function handlePlanSelection(
   ctx: Context,
-  opts: { planId?: string; planText?: string },
+  opts: { planId: string },
 ) {
   const userID = ctx.from?.id!;
-  const plan =
-    getPlan(opts.planId) ??
-    (opts.planText ? PLANS.find((p) => p.buttonText === opts.planText) : undefined);
+  const plan = getPlan(opts.planId);
   if (!plan) return;
 
   if (pendingCreateConfig.has(userID)) {
@@ -474,9 +471,9 @@ export async function handleOrderCancel(ctx: Context) {
   pendingCreateConfig.delete(userID);
   pendingCreateConfigType.delete(userID);
   try {
-    await ctx.editMessageText(`${greet}`, { reply_markup: mainMenu });
+    await ctx.editMessageText(bigGreet(ctx.from?.first_name), { reply_markup: mainMenu });
   } catch {
-    await ctx.reply(greet, { reply_markup: mainMenu });
+    await ctx.reply(bigGreet(ctx.from?.first_name), { reply_markup: mainMenu });
   }
   await ctx.answerCallbackQuery().catch(() => {});
 }
@@ -556,7 +553,7 @@ export async function handleAdminMenuCallback(
       broadcastAudience.set(ctx.from?.id!, "all");
       waitingForBroadcast.add(ctx.from?.id!);
       await ctx.reply(
-        "متن یا عکس بفرست تا همونو برای همه بفرستم. برای انصراف «لغو سفارش» یا بازگشت رو بزن.",
+        "متن یا عکس بفرست تا همونو برای همه بفرستم. برای انصراف دکمه «بازگشت به منو اصلی 🔙» رو بزن.",
         { reply_markup: backHomeMenu },
       );
       break;
@@ -564,7 +561,7 @@ export async function handleAdminMenuCallback(
       broadcastAudience.set(ctx.from?.id!, "subs");
       waitingForBroadcast.add(ctx.from?.id!);
       await ctx.reply(
-        "متن یا عکس بفرست تا همونو فقط برای کاربرایی که اشتراک دارن بفرستم. برای انصراف «لغو سفارش» یا بازگشت رو بزن.",
+        "متن یا عکس بفرست تا همونو فقط برای کاربرایی که اشتراک دارن بفرستم. برای انصراف دکمه «بازگشت به منو اصلی 🔙» رو بزن.",
         { reply_markup: backHomeMenu },
       );
       break;
@@ -1054,7 +1051,7 @@ export async function handleBroadcastMessage(
   const text = ctx.message?.text;
 
   if (!photo && !text) {
-    await ctx.reply("متن یا عکس بفرست تا همونو برای همه بفرستم. برای انصراف «لغو سفارش» یا بازگشت رو بزن.", {
+    await ctx.reply("متن یا عکس بفرست تا همونو برای همه بفرستم. برای انصراف دکمه «بازگشت به منو اصلی 🔙» رو بزن.", {
       reply_markup: backHomeMenu,
     });
     return true;
@@ -1221,28 +1218,6 @@ export async function cancelBroadcast(ctx: Context) {
     await ctx.reply("اوکی، پیام همگانی کنسل شد.", { reply_markup: backHomeMenu });
   }
   await ctx.answerCallbackQuery().catch(() => {});
-}
-
-export async function handleBroadcastConfirm(
-  ctx: Context,
-  db: DB,
-): Promise<boolean> {
-  const adminID = ctx.from?.id!;
-  const draft = pendingBroadcast.get(adminID);
-  if (!draft) return false;
-
-  const text = ctx.message?.text ?? "";
-  if (text === resetBtn || text === cancelBtn) {
-    pendingBroadcast.delete(adminID);
-    return false;
-  }
-
-  // Legacy text-based confirm (kept for backward compat); inline flow uses
-  // broadcast:confirm / broadcast:cancel callbacks instead.
-  const confirmMatch = text.match(/^تایید ارسال به (\d+) کاربر ✅$/);
-  if (!confirmMatch) return true;
-
-  return executeBroadcast(ctx, db);
 }
 
 export async function handleTutorial(ctx: Context) {

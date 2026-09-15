@@ -1,4 +1,4 @@
-import { InlineKeyboard, Keyboard } from "grammy";
+import { InlineKeyboard } from "grammy";
 import {
   tutorialBtnTxt,
   renewSubBtn,
@@ -22,27 +22,20 @@ import {
 } from "./messages";
 import { PLANS } from "./plans";
 
-// NOTE: Telegram does not allow `request_contact` on inline buttons, so the
-// contact-request keyboard intentionally stays a reply keyboard. Everything
-// else is inline (callback_data based) so no persistent reply keyboard stays
-// on screen.
-export const shareContactKey = new Keyboard()
-  .requestContact("☎️ ارسال شماره موبایل")
-  .resized()
-  .oneTime();
-
-// Legacy reply keyboards are removed by sending this once (on /start and on
-// "home"). All menus below are inline.
-export const removeReplyKeyboard = { remove_keyboard: true } as const;
+// All menus are inline (callback_data based) so no persistent reply keyboard
+// ever stays on screen.
 
 export const mainMenu = new InlineKeyboard()
-  .text(renewSubBtn, "menu:renew")
   .text(buySubBtn, "menu:buy")
   .row()
+  .text(renewSubBtn, "menu:renew")
+  .row()
   .text(getConfigBtn, "menu:getconfig")
+  .row()
   .text(mySubBtn, "menu:status")
   .row()
   .text(tutorialBtnTxt, "menu:tutorial")
+  .row()
   .text(contactTxt, "menu:contact");
 
 export const renewMenu = (() => {
@@ -57,27 +50,26 @@ export const cancelMenu = new InlineKeyboard().text(cancelBtn, "order:cancel");
 
 export const backHomeMenu = new InlineKeyboard().text(resetBtn, "menu:home");
 
-export const adminReplyKeys = (userID: number) =>
-  new InlineKeyboard()
-    .text("✅ قبول", `renewAccept:${userID}`)
-    .text("❌ رد", `renewDecline:${userID}`);
-
 export const adminMenu = (isOwner: boolean) => {
   const kb = new InlineKeyboard()
     .text(myPanelsBtn, "admin:panels")
     .row()
     .text(addPanelBtn, "admin:add")
+    .row()
     .text(deletePanelBtn, "admin:del")
     .row()
     .text(appStateBtn, "admin:state")
     .row()
     .text(changeRenewStateBtn, "admin:trenew")
+    .row()
     .text(changeSellStateBtn, "admin:tsell")
     .row()
     .text(broadcastBtn, "admin:broadcast")
+    .row()
     .text(broadcastSubsBtn, "admin:broadcast-subs")
     .row()
     .text(backupBtn, "admin:backup")
+    .row()
     .text(userCountBtn, "admin:users");
   if (isOwner) kb.row().text(adminsBtn, "admin:admins");
   return kb;
@@ -90,11 +82,13 @@ export const subAdminMenu = new InlineKeyboard().text(
 
 export const adminsMenu = new InlineKeyboard()
   .text("➕ افزودن ادمین", "admins:add")
+  .row()
   .text("➖ حذف ادمین", "admins:del")
   .row()
   .text("📋 لیست ادمین‌ها", "admins:list")
   .row()
   .text(resetBtn, "menu:home")
+  .row()
   .text("🔙 منوی ادمین", "admins:back");
 
 export const broadcastConfirmMenu = (pendingCount: number) =>
