@@ -238,6 +238,34 @@ async function notifyReceiptReviewers(
   }
 }
 
+/** Display name for the admin who handled a receipt. */
+export function formatAdminTag(ctx: Context): string {
+  const adminID = ctx.from?.id!;
+  const username = ctx.from?.username?.trim();
+  const firstName = ctx.from?.first_name?.trim();
+  const lastName = ctx.from?.last_name?.trim();
+  const displayName = [firstName, lastName].filter(Boolean).join(" ");
+  if (username) return `@${username}${displayName ? ` (${displayName})` : ""} [${adminID}]`;
+  return displayName ? `${displayName} [${adminID}]` : `ادمین [${adminID}]`;
+}
+
+/** Notify all receipt reviewers except the acting admin about an accept/decline. */
+export async function notifyOtherReviewers(
+  ctx: Context,
+  db: DB,
+  text: string,
+) {
+  const actorId = ctx.from?.id;
+  for (const reviewerId of receiptReviewerIds(db)) {
+    if (reviewerId === actorId) continue;
+    try {
+      await ctx.api.sendMessage(reviewerId, text);
+    } catch (error) {
+      console.error(`notifyOtherReviewers: send to ${reviewerId} failed:`, error);
+    }
+  }
+}
+
 export const handleRenewDeclineCallback = async (ctx: Context, db: DB) => {
   if (!isPrivileged(db, ctx.from?.id))
     return await ctx.answerCallbackQuery({ text: "Not allowed" });
@@ -258,6 +286,11 @@ export const handleRenewDeclineCallback = async (ctx: Context, db: DB) => {
 با آیدی پشتیبانی در ارتباط باشید👇🏼
 
 🆔: @foxngsup`,
+  );
+  await notifyOtherReviewers(
+    ctx,
+    db,
+    `❌ درخواست تمدید کاربر ${userId} توسط ${formatAdminTag(ctx)} رد شد.`,
   );
   await ctx.reply("رد شد ❌");
   await ctx.answerCallbackQuery();
@@ -283,6 +316,11 @@ export const handleCreateDeclineCallback = async (ctx: Context, db: DB) => {
 با آیدی پشتیبانی در ارتباط باشید👇🏼
 
 🆔: @foxngsup`,
+  );
+  await notifyOtherReviewers(
+    ctx,
+    db,
+    `❌ درخواست خرید کاربر ${userId} توسط ${formatAdminTag(ctx)} رد شد.`,
   );
   await ctx.reply("رد شد ❌");
   await ctx.answerCallbackQuery();

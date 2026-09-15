@@ -4,6 +4,7 @@ import {
   addPanelConv,
   cancelBroadcast,
   executeBroadcast,
+  formatAdminTag,
   genConfig,
   getConfigCache,
   getConfigsPanel,
@@ -31,6 +32,7 @@ import {
   handleUserMenuCallback,
   isOwner,
   isPrivileged,
+  notifyOtherReviewers,
   pendingBroadcast,
   pendingConfig,
   pendingConfigType,
@@ -428,6 +430,11 @@ export class TelBot {
           caption: `اشتراک شما با موفقیت فعال شد ✅\n\nلینک کانفیگ شما 👇\n(برای کپی کردن لینک یک بار روی آن کلیک کنید.)\n\n<code>${configLink}</code>\n\nاگه بلد نیستی از لینک استفاده کنی از دکمه\n"⚙️ آموزش اتصال به کانفیگ" استفاده کن`,
           parse_mode: "HTML",
         });
+        await notifyOtherReviewers(
+          ctx,
+          db,
+          `✅ درخواست خرید کاربر ${userId} توسط ${formatAdminTag(ctx)} تایید شد.`,
+        );
         await ctx.reply("تایید شد ✅");
       } catch (error) {
         console.error("createAccept handler threw:", error);
@@ -561,6 +568,11 @@ export class TelBot {
           const reset = await panel.resetClientTraffic(inboundID, email);
           if (reset) {
             await ctx.api.sendMessage(userId, "اشتراک شما با موفقیت فعال شد ✅");
+            await notifyOtherReviewers(
+              ctx,
+              db,
+              `✅ درخواست تمدید کاربر ${userId} توسط ${formatAdminTag(ctx)} تایید شد.`,
+            );
             await ctx.reply("تایید شد ✅");
             await ctx.answerCallbackQuery();
           } else {
