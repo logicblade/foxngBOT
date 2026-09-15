@@ -1,4 +1,3 @@
-export const greet = "به منو اصلی خوش برگشتی🔻";
 export function bigGreet(firstName?: string): string {
   const name = firstName?.trim();
   const helloLine = name
@@ -29,19 +28,6 @@ export const tutorialBtnTxt = "⚙️ آموزش اتصال به کانفیگ";
 export const getConfigBtn = "🔗 دریافت دوباره لینک کانفیگ";
 export const resetBtn = "بازگشت به منو اصلی 🔙";
 export const cancelBtn = "لغو سفارش";
-export const creatingTestConfTxt = `در حال ساختن کانفیگ تست
-لطفا صبر کنید...`;
-export const welcomeTxt =
-  "کاربر عزیز، جهت استفاده از ربات برای پیگیری سفارش و دریافت پشتیبانی، لطفا با استفاده از دکمه زیر، شماره همراه خود را ثبت کنید 👇";
-export const buySubTxt = `
-اگر قبلا اشتراک خریدی
-از دکمه " ♻️ تمدید اشتراک"
-یا /renew استفاده کن
-
-و اگر اشتراک نداری، برای خرید اشتراک به آیدی زیر پیام بده 👇
-
-🆔: @foxngsup
-`;
 export const searchingTxt = "⏳ در حال جستجو...";
 export const disableSellTxt = `
 کاربر عزیز، متاسفانه در حال حاضر امکان خرید اشتراک جدید وجود ندارد ⛔️

@@ -11,29 +11,19 @@ import {
   handleAdminIdMessage,
   handleAdminMenuCallback,
   handleAdminsMenuCallback,
-  handleBackup,
-  handleBroadcastConfirm,
   handleBroadcastMessage,
-  handleCheckAccount,
-  handleContact,
-  handleCreateAccount,
   handleCreateDeclineCallback,
-  handleGetConfig,
   handleImagesIncome,
-  handleMenuHome,
   handleOrderCancel,
   handlePlanSelection,
-  handleRenewAccount,
   handleRenewCallback,
   handleRenewDeclineCallback,
   handleStartCommandForAdmin,
   handleStartCommandForUser,
-  handleTutorial,
   handleUserMenuCallback,
   isOwner,
   isPrivileged,
   notifyOtherReviewers,
-  pendingBroadcast,
   pendingConfig,
   pendingConfigType,
   pendingCreateConfig,
@@ -42,39 +32,10 @@ import {
   pendingRenewals,
   removePanelConv,
   renewCache,
-  showAppStateToAdmin,
-  showPanelsListToAdmin,
-  showUserCountToAdmin,
-  state,
-  broadcastAudience,
-  waitingForBroadcast,
   waitingForCreateImage,
   waitingForRenewImage,
 } from "./helpers";
-import {
-  buySubBtn,
-  tutorialBtnTxt,
-  myPanelsBtn,
-  addPanelBtn,
-  deletePanelBtn,
-  renewSubBtn,
-  mySubBtn,
-  contactTxt,
-  disableSellTxt,
-  disableRenewTxt,
-  appStateBtn,
-  changeSellStateBtn,
-  changeRenewStateBtn,
-  getConfigBtn,
-  backupBtn,
-  broadcastBtn,
-  broadcastSubsBtn,
-  adminsBtn,
-  userCountBtn,
-  resetBtn,
-  cancelBtn,
-} from "./messages";
-import { backHomeMenu } from "./keyboards";
+import { adminMenu, mainMenu, subAdminMenu } from "./keyboards";
 import { getPlan } from "./plans";
 import { type ConversationFlavor,
   conversations,
@@ -112,184 +73,14 @@ export class TelBot {
         waitingForCreateImage.has(userID)
       ) {
         await handleImagesIncome(ctx, db);
+        return;
       }
-      // Owner admin flows (broadcast + admin-ID entry).
+      // Owner admin flows: broadcast input + admin-ID entry (text-based).
       if (isOwner(userID)) {
         if (await handleBroadcastMessage(ctx, db)) return;
-        if (pendingBroadcast.has(userID)) {
-          if (await handleBroadcastConfirm(ctx, db)) return;
-        }
         if (await handleAdminIdMessage(ctx, db)) return;
       }
-      if (!ctx.message?.text) return;
-
-      switch (ctx.message.text) {
-        case buySubBtn:
-          if (!state.isSellActive) {
-            await ctx.reply(disableSellTxt, { reply_markup: backHomeMenu });
-            break;
-          }
-          await handleCreateAccount(ctx);
-          break;
-
-        case mySubBtn:
-          await handleCheckAccount(ctx, db);
-          break;
-
-        case renewSubBtn:
-          if (!state.isRenewActive) {
-            ctx.reply(disableRenewTxt, { reply_markup: backHomeMenu });
-            break;
-          }
-          await handleRenewAccount(ctx, db);
-          break;
-
-        case getConfigBtn:
-          await handleGetConfig(ctx, db);
-          break;
-
-        case tutorialBtnTxt:
-          await handleTutorial(ctx);
-          break;
-
-        case contactTxt:
-          await handleContact(ctx);
-          break;
-
-        case resetBtn:
-        case cancelBtn:
-          await handleMenuHome(ctx);
-          break;
-
-        case myPanelsBtn:
-          if (!isOwner(userID)) {
-            await ctx.reply("این حرفا رو از کجا یاد گرفتی؟؟", {
-              reply_markup: backHomeMenu,
-            });
-            break;
-          }
-          await showPanelsListToAdmin(ctx, db);
-          break;
-
-        case addPanelBtn:
-          if (!isOwner(userID)) {
-            await ctx.reply("این حرفا رو از کجا یاد گرفتی؟؟", {
-              reply_markup: backHomeMenu,
-            });
-            break;
-          }
-          await ctx.conversation.enter("addPanelConv");
-          break;
-
-        case deletePanelBtn:
-          if (!isOwner(userID)) {
-            await ctx.reply("این حرفا رو از کجا یاد گرفتی؟؟", {
-              reply_markup: backHomeMenu,
-            });
-            break;
-          }
-          await ctx.conversation.enter("removePanelConv");
-          break;
-
-        case appStateBtn:
-          if (!isOwner(userID)) {
-            await ctx.reply("این حرفا رو از کجا یاد گرفتی؟؟", {
-              reply_markup: backHomeMenu,
-            });
-            break;
-          }
-          await showAppStateToAdmin(ctx);
-          break;
-
-        case changeSellStateBtn:
-          if (!isOwner(userID)) {
-            await ctx.reply("این حرفا رو از کجا یاد گرفتی؟؟", {
-              reply_markup: backHomeMenu,
-            });
-            break;
-          }
-          state.isSellActive = !state.isSellActive;
-          await showAppStateToAdmin(ctx);
-          break;
-
-        case changeRenewStateBtn:
-          if (!isOwner(userID)) {
-            await ctx.reply("این حرفا رو از کجا یاد گرفتی؟؟", {
-              reply_markup: backHomeMenu,
-            });
-            break;
-          }
-          state.isRenewActive = !state.isRenewActive;
-          await showAppStateToAdmin(ctx);
-          break;
-
-        case backupBtn:
-          if (!isOwner(userID)) {
-            await ctx.reply("این حرفا رو از کجا یاد گرفتی؟؟", {
-              reply_markup: backHomeMenu,
-            });
-            break;
-          }
-          await handleBackup(ctx);
-          break;
-
-        case userCountBtn:
-          if (!isOwner(userID)) {
-            await ctx.reply("این حرفا رو از کجا یاد گرفتی؟؟", {
-              reply_markup: backHomeMenu,
-            });
-            break;
-          }
-          await showUserCountToAdmin(ctx, db);
-          break;
-
-        case broadcastBtn:
-          if (!isOwner(userID)) {
-            await ctx.reply("این حرفا رو از کجا یاد گرفتی؟؟", {
-              reply_markup: backHomeMenu,
-            });
-            break;
-          }
-          pendingBroadcast.delete(userID);
-          broadcastAudience.set(userID, "all");
-          waitingForBroadcast.add(userID);
-          await ctx.reply(
-            "متن یا عکسی که میخوای برای همه کاربرا بفرستم رو همینجا بفرست.\n\nاگه پشیمون شدی بنویس «بیخیال».",
-            { reply_markup: backHomeMenu },
-          );
-          break;
-
-        case broadcastSubsBtn:
-          if (!isOwner(userID)) {
-            await ctx.reply("این حرفا رو از کجا یاد گرفتی؟؟", {
-              reply_markup: backHomeMenu,
-            });
-            break;
-          }
-          pendingBroadcast.delete(userID);
-          broadcastAudience.set(userID, "subs");
-          waitingForBroadcast.add(userID);
-          await ctx.reply(
-            "متن یا عکسی که میخوای فقط برای مشترکین (کاربرایی که اشتراک دارن) بفرستم رو همینجا بفرست.\n\nاگه پشیمون شدی بنویس «بیخیال».",
-            { reply_markup: backHomeMenu },
-          );
-          break;
-
-        case adminsBtn:
-          if (!isOwner(userID)) break;
-          await handleAdminMenuCallback(
-            { ...ctx, callbackQuery: { data: "admin:admins" } } as never,
-            db,
-          );
-          break;
-
-        default: {
-          await handlePlanSelection(ctx, { planText: ctx.message.text });
-          break;
-        }
-      }
     });
-
     // Inline menus (primary UX): menu:* / admin:* / plan:* / order:* / broadcast:*.
     this.bot.callbackQuery(/^menu:/, async (ctx) => {
       db.upsertUser(ctx.from.id);
@@ -429,13 +220,15 @@ export class TelBot {
         await ctx.api.sendPhoto(userId, qrFile, {
           caption: `اشتراک شما با موفقیت فعال شد ✅\n\nلینک کانفیگ شما 👇\n(برای کپی کردن لینک یک بار روی آن کلیک کنید.)\n\n<code>${configLink}</code>\n\nاگه بلد نیستی از لینک استفاده کنی از دکمه\n"⚙️ آموزش اتصال به کانفیگ" استفاده کن`,
           parse_mode: "HTML",
+          reply_markup: mainMenu,
         });
         await notifyOtherReviewers(
           ctx,
           db,
           `✅ درخواست خرید کاربر ${userId} توسط ${formatAdminTag(ctx)} تایید شد.`,
         );
-        await ctx.reply("تایید شد ✅");
+        const menu = isOwner(ctx.from?.id) ? adminMenu(true) : subAdminMenu;
+        await ctx.reply("تایید شد ✅", { reply_markup: menu });
       } catch (error) {
         console.error("createAccept handler threw:", error);
         try {
@@ -567,13 +360,16 @@ export class TelBot {
           db.setClientBonus(UUID, newBonus);
           const reset = await panel.resetClientTraffic(inboundID, email);
           if (reset) {
-            await ctx.api.sendMessage(userId, "اشتراک شما با موفقیت فعال شد ✅");
+            await ctx.api.sendMessage(userId, "اشتراک شما با موفقیت فعال شد ✅", {
+              reply_markup: mainMenu,
+            });
             await notifyOtherReviewers(
               ctx,
               db,
               `✅ درخواست تمدید کاربر ${userId} توسط ${formatAdminTag(ctx)} تایید شد.`,
             );
-            await ctx.reply("تایید شد ✅");
+            const menu = isOwner(ctx.from?.id) ? adminMenu(true) : subAdminMenu;
+            await ctx.reply("تایید شد ✅", { reply_markup: menu });
             await ctx.answerCallbackQuery();
           } else {
             console.error(`renewAccept: resetClientTraffic failed for ${email}`);
@@ -614,6 +410,7 @@ export class TelBot {
       await ctx.api.sendPhoto(userID, qrFile, {
         caption: `لینک کانفیگ شما به نام ${Util.removeEmoji(selected?.email!)} 👇\n(برای کپی کردن لینک یک بار روی آن کلیک کنید.)\n\n<code>${configLink}</code>`,
         parse_mode: "HTML",
+        reply_markup: mainMenu,
       });
       await ctx.answerCallbackQuery();
     });
