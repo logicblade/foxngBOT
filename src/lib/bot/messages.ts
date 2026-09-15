@@ -18,6 +18,8 @@ export function bigGreet(firstName?: string): string {
 
 🆔: @FOXNGsup`;
 }
+export const planFeaturesNote = `⏳ بدون محدودیت زمانی | 🌐 آیپی ثابت ✅
+تمامی اشتراک‌ها بدون محدودیت زمانی هستن و با آیپی ثابت ارائه می‌شن`;
 export const mySubBtn = "⏳ وضعیت اشتراک من";
 export const testConfBtn = "✅ دریافت کانفیگ تست";
 export const buySubBtn = "🚀 خرید اشتراک جدید";
@@ -42,13 +44,13 @@ export const buySubTxt = `
 `;
 export const searchingTxt = "⏳ در حال جستجو...";
 export const disableSellTxt = `
-کاربر عزیز، متاسفانه در حال حاضر امکان خرید اشتراک جدید وجود ندارد 😓⛔️
+کاربر عزیز، متاسفانه در حال حاضر امکان خرید اشتراک جدید وجود ندارد ⛔️
 `;
 export const disableRenewTxt = `
-کاربر عزیز، متاسفانه در حال حاضر امکان تمدید اشتراک وجود ندارد 😓⛔️
+کاربر عزیز، متاسفانه در حال حاضر امکان تمدید اشتراک وجود ندارد ⛔️
 `;
 export const noSubFoundTxt = `
-کاربر عزیز، اشتراک شما پیدا نشد 😓⛔️
+کاربر عزیز، اشتراک شما پیدا نشد ⛔️
 
 جهت خرید اشتراک از دکمه
 "🚀 خرید اشتراک جدید" استفاده کنید 👇

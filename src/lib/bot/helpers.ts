@@ -8,6 +8,7 @@ import {
   greet,
   justImageTxt,
   noSubFoundTxt,
+  planFeaturesNote,
   reciptReceiveTxt,
   searchingTxt,
   subFoundGetConfTxt,
@@ -184,7 +185,9 @@ export const handleRenewCallback = async (ctx: Context) => {
   });
 
   await ctx.reply(
-    `لطفا نوع اشتراک خود را انتخاب کنید:
+    `${planFeaturesNote}
+
+لطفا نوع اشتراک خود را انتخاب کنید:
 
 چنانچه نیاز به اشتراک با حجم بیشتر دارید، با پشتیبانی تماس بگیرید 👇
 
@@ -349,7 +352,13 @@ export async function handleRenewAccount(ctx: Context, db: DB) {
 export async function handleCreateAccount(ctx: Context) {
   pendingCreateConfig.add(ctx.from?.id!);
   await ctx.reply(
-    "اشتراک مورد نظرتو انتخاب کن 👇\n\nاگه نیاز به حجم بیشتر داری با پشتیبانی تماس بگیر 👇\n\n🆔: @foxngsup",
+    `${planFeaturesNote}
+
+اشتراک مورد نظرتو انتخاب کن 👇
+
+اگه نیاز به حجم بیشتر داری با پشتیبانی تماس بگیر 👇
+
+🆔: @foxngsup`,
     {
       reply_markup: renewMenu,
     },
