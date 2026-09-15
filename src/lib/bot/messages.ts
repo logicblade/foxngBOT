@@ -1,10 +1,23 @@
 export const greet = "به منو اصلی خوش برگشتی🔻";
-export const bigGreet = `
-سلام دوست من😍
-به ربات مدیریت اشتراک FoxNG خوش اومدی❤️
-به کمک دکمه ها میتونی اشتراکتو مدیریت کنی✅
-و اگه سوالی داشتی از دکمه ارتباط با پشتیبانی استفاده کن👨🏻‍💻
-`;
+export function bigGreet(firstName?: string): string {
+  const name = firstName?.trim();
+  const helloLine = name
+    ? `🌐 سلام ${name} عزیز! خوش اومدی به ربات FOXNG 🚀`
+    : `🌐 خوش اومدی به ربات FOXNG 🚀`;
+  return `${helloLine}
+🔐 اینترنت آزاد فقط چند کلیک با تو فاصله داره!
+
+✅  سرعت بالا، بدون قطعی
+✅  آیپی ثابت
+✅  پشتیبانی تا آخرین روز سرویس
+✅  ضمانت بازگشت وجه
+
+از منوی پایین شروع کن  👇🏼
+
+یا اگه نیاز به پشتیبانی داری به آیدی زیر پیام بده:
+
+🆔: @FOXNGsup`;
+}
 export const mySubBtn = "⏳ وضعیت اشتراک من";
 export const testConfBtn = "✅ دریافت کانفیگ تست";
 export const buySubBtn = "🚀 خرید اشتراک جدید";

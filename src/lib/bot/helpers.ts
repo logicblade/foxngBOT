@@ -75,7 +75,7 @@ export async function handleStartCommandForUser(ctx: Context, db: DB) {
   }
   // Remove any legacy reply keyboard first, then show the inline main menu.
   await ctx.reply(greet, { reply_markup: removeReplyKeyboard });
-  await ctx.reply(bigGreet, { reply_markup: mainMenu });
+  await ctx.reply(bigGreet(ctx.from?.first_name), { reply_markup: mainMenu });
 }
 
 export async function handleImagesIncome(ctx: Context, db: DB) {
@@ -408,9 +408,9 @@ export async function handleMenuHome(ctx: Context) {
   broadcastAudience.delete(userID);
   pendingBroadcast.delete(userID);
   try {
-    await ctx.editMessageText(`${bigGreet}`, { reply_markup: mainMenu });
+    await ctx.editMessageText(bigGreet(ctx.from?.first_name), { reply_markup: mainMenu });
   } catch {
-    await ctx.reply(bigGreet, { reply_markup: mainMenu });
+    await ctx.reply(bigGreet(ctx.from?.first_name), { reply_markup: mainMenu });
   }
   await ctx.answerCallbackQuery().catch(() => {});
 }
