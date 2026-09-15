@@ -18,6 +18,7 @@ import {
   broadcastBtn,
   broadcastSubsBtn,
   userCountBtn,
+  adminsBtn,
 } from "./messages";
 import { PLANS } from "./plans";
 
@@ -61,22 +62,40 @@ export const adminReplyKeys = (userID: number) =>
     .text("✅ قبول", `renewAccept:${userID}`)
     .text("❌ رد", `renewDecline:${userID}`);
 
-export const adminMenu = new InlineKeyboard()
-  .text(myPanelsBtn, "admin:panels")
+export const adminMenu = (isOwner: boolean) => {
+  const kb = new InlineKeyboard()
+    .text(myPanelsBtn, "admin:panels")
+    .row()
+    .text(addPanelBtn, "admin:add")
+    .text(deletePanelBtn, "admin:del")
+    .row()
+    .text(appStateBtn, "admin:state")
+    .row()
+    .text(changeRenewStateBtn, "admin:trenew")
+    .text(changeSellStateBtn, "admin:tsell")
+    .row()
+    .text(broadcastBtn, "admin:broadcast")
+    .text(broadcastSubsBtn, "admin:broadcast-subs")
+    .row()
+    .text(backupBtn, "admin:backup")
+    .text(userCountBtn, "admin:users");
+  if (isOwner) kb.row().text(adminsBtn, "admin:admins");
+  return kb;
+};
+
+export const subAdminMenu = new InlineKeyboard().text(
+  "🔄 به‌روزرسانی",
+  "admins:noop",
+);
+
+export const adminsMenu = new InlineKeyboard()
+  .text("➕ افزودن ادمین", "admins:add")
+  .text("➖ حذف ادمین", "admins:del")
   .row()
-  .text(addPanelBtn, "admin:add")
-  .text(deletePanelBtn, "admin:del")
+  .text("📋 لیست ادمین‌ها", "admins:list")
   .row()
-  .text(appStateBtn, "admin:state")
-  .row()
-  .text(changeRenewStateBtn, "admin:trenew")
-  .text(changeSellStateBtn, "admin:tsell")
-  .row()
-  .text(broadcastBtn, "admin:broadcast")
-  .text(broadcastSubsBtn, "admin:broadcast-subs")
-  .row()
-  .text(backupBtn, "admin:backup")
-  .text(userCountBtn, "admin:users");
+  .text(resetBtn, "menu:home")
+  .text("🔙 منوی ادمین", "admins:back");
 
 export const broadcastConfirmMenu = (pendingCount: number) =>
   new InlineKeyboard()

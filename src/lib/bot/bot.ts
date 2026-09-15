@@ -2,13 +2,14 @@ import { Bot, type Context, InputFile } from "grammy";
 import { DB } from "../../util/db";
 import {
   addPanelConv,
-  ADMIN_ID,
   cancelBroadcast,
   executeBroadcast,
   genConfig,
   getConfigCache,
   getConfigsPanel,
+  handleAdminIdMessage,
   handleAdminMenuCallback,
+  handleAdminsMenuCallback,
   handleBackup,
   handleBroadcastConfirm,
   handleBroadcastMessage,
@@ -28,6 +29,8 @@ import {
   handleStartCommandForUser,
   handleTutorial,
   handleUserMenuCallback,
+  isOwner,
+  isPrivileged,
   pendingBroadcast,
   pendingConfig,
   pendingConfigType,
@@ -64,6 +67,7 @@ import {
   backupBtn,
   broadcastBtn,
   broadcastSubsBtn,
+  adminsBtn,
   userCountBtn,
   resetBtn,
   cancelBtn,
@@ -91,7 +95,7 @@ export class TelBot {
     this.bot.use(createConversation(removePanelConv));
 
     this.bot.command("start", async (ctx) => {
-      if (ctx.from?.id === ADMIN_ID) {
+      if (isOwner(ctx.from?.id) || db.isAdmin(ctx.from?.id!)) {
         await handleStartCommandForAdmin(ctx, db);
       } else {
         await handleStartCommandForUser(ctx, db);
@@ -105,13 +109,15 @@ export class TelBot {
         waitingForRenewImage.has(userID) ||
         waitingForCreateImage.has(userID)
       ) {
-        await handleImagesIncome(ctx);
+        await handleImagesIncome(ctx, db);
       }
-      if (userID === ADMIN_ID) {
+      // Owner admin flows (broadcast + admin-ID entry).
+      if (isOwner(userID)) {
         if (await handleBroadcastMessage(ctx, db)) return;
         if (pendingBroadcast.has(userID)) {
           if (await handleBroadcastConfirm(ctx, db)) return;
         }
+        if (await handleAdminIdMessage(ctx, db)) return;
       }
       if (!ctx.message?.text) return;
 
@@ -154,7 +160,7 @@ export class TelBot {
           break;
 
         case myPanelsBtn:
-          if (userID !== ADMIN_ID) {
+          if (!isOwner(userID)) {
             await ctx.reply("این حرفا رو از کجا یاد گرفتی؟؟", {
               reply_markup: backHomeMenu,
             });
@@ -164,7 +170,7 @@ export class TelBot {
           break;
 
         case addPanelBtn:
-          if (userID !== ADMIN_ID) {
+          if (!isOwner(userID)) {
             await ctx.reply("این حرفا رو از کجا یاد گرفتی؟؟", {
               reply_markup: backHomeMenu,
             });
@@ -174,7 +180,7 @@ export class TelBot {
           break;
 
         case deletePanelBtn:
-          if (userID !== ADMIN_ID) {
+          if (!isOwner(userID)) {
             await ctx.reply("این حرفا رو از کجا یاد گرفتی؟؟", {
               reply_markup: backHomeMenu,
             });
@@ -184,7 +190,7 @@ export class TelBot {
           break;
 
         case appStateBtn:
-          if (userID !== ADMIN_ID) {
+          if (!isOwner(userID)) {
             await ctx.reply("این حرفا رو از کجا یاد گرفتی؟؟", {
               reply_markup: backHomeMenu,
             });
@@ -194,7 +200,7 @@ export class TelBot {
           break;
 
         case changeSellStateBtn:
-          if (userID !== ADMIN_ID) {
+          if (!isOwner(userID)) {
             await ctx.reply("این حرفا رو از کجا یاد گرفتی؟؟", {
               reply_markup: backHomeMenu,
             });
@@ -205,7 +211,7 @@ export class TelBot {
           break;
 
         case changeRenewStateBtn:
-          if (userID !== ADMIN_ID) {
+          if (!isOwner(userID)) {
             await ctx.reply("این حرفا رو از کجا یاد گرفتی؟؟", {
               reply_markup: backHomeMenu,
             });
@@ -216,7 +222,7 @@ export class TelBot {
           break;
 
         case backupBtn:
-          if (userID !== ADMIN_ID) {
+          if (!isOwner(userID)) {
             await ctx.reply("این حرفا رو از کجا یاد گرفتی؟؟", {
               reply_markup: backHomeMenu,
             });
@@ -226,7 +232,7 @@ export class TelBot {
           break;
 
         case userCountBtn:
-          if (userID !== ADMIN_ID) {
+          if (!isOwner(userID)) {
             await ctx.reply("این حرفا رو از کجا یاد گرفتی؟؟", {
               reply_markup: backHomeMenu,
             });
@@ -236,7 +242,7 @@ export class TelBot {
           break;
 
         case broadcastBtn:
-          if (userID !== ADMIN_ID) {
+          if (!isOwner(userID)) {
             await ctx.reply("این حرفا رو از کجا یاد گرفتی؟؟", {
               reply_markup: backHomeMenu,
             });
@@ -252,7 +258,7 @@ export class TelBot {
           break;
 
         case broadcastSubsBtn:
-          if (userID !== ADMIN_ID) {
+          if (!isOwner(userID)) {
             await ctx.reply("این حرفا رو از کجا یاد گرفتی؟؟", {
               reply_markup: backHomeMenu,
             });
@@ -264,6 +270,14 @@ export class TelBot {
           await ctx.reply(
             "متن یا عکسی که میخوای فقط برای مشترکین (کاربرایی که اشتراک دارن) بفرستم رو همینجا بفرست.\n\nاگه پشیمون شدی بنویس «بیخیال».",
             { reply_markup: backHomeMenu },
+          );
+          break;
+
+        case adminsBtn:
+          if (!isOwner(userID)) break;
+          await handleAdminMenuCallback(
+            { ...ctx, callbackQuery: { data: "admin:admins" } } as never,
+            db,
           );
           break;
 
@@ -280,7 +294,7 @@ export class TelBot {
       await handleUserMenuCallback(ctx, db);
     });
     this.bot.callbackQuery(/^admin:/, async (ctx) => {
-      if (ctx.from?.id !== ADMIN_ID) {
+      if (!isPrivileged(db, ctx.from?.id)) {
         return await ctx.answerCallbackQuery({ text: "Not allowed" });
       }
       await handleAdminMenuCallback(ctx, db);
@@ -294,8 +308,14 @@ export class TelBot {
       await handlePlanSelection(ctx, { planId: plan.id });
     });
     this.bot.callbackQuery("order:cancel", handleOrderCancel);
+    this.bot.callbackQuery(/^admins:/, async (ctx) => {
+      if (!isOwner(ctx.from?.id)) {
+        return await ctx.answerCallbackQuery({ text: "Owner only" });
+      }
+      await handleAdminsMenuCallback(ctx, db);
+    });
     this.bot.callbackQuery("broadcast:confirm", async (ctx) => {
-      if (ctx.from?.id !== ADMIN_ID) {
+      if (!isOwner(ctx.from?.id)) {
         return await ctx.answerCallbackQuery({ text: "Not allowed" });
       }
       await executeBroadcast(ctx, db);
@@ -304,11 +324,15 @@ export class TelBot {
 
     this.bot.callbackQuery(/^renew:/, handleRenewCallback);
 
-    this.bot.callbackQuery(/^renewDecline:/, handleRenewDeclineCallback);
-    this.bot.callbackQuery(/^createDecline:/, handleCreateDeclineCallback);
+    this.bot.callbackQuery(/^renewDecline:/, async (ctx) =>
+      handleRenewDeclineCallback(ctx, db),
+    );
+    this.bot.callbackQuery(/^createDecline:/, async (ctx) =>
+      handleCreateDeclineCallback(ctx, db),
+    );
     this.bot.callbackQuery(/^createAccept:/, async (ctx: Context) => {
       const adminID = ctx.from?.id!;
-      if (adminID !== ADMIN_ID)
+      if (!isPrivileged(db, adminID))
         return await ctx.answerCallbackQuery({ text: "Not allowed" });
 
       try {
@@ -414,7 +438,7 @@ export class TelBot {
     });
     this.bot.callbackQuery(/^renewAccept:/, async (ctx: Context) => {
       const adminID = ctx.from?.id!;
-      if (adminID !== ADMIN_ID)
+      if (!isPrivileged(db, adminID))
         return await ctx.answerCallbackQuery({ text: "Not allowed" });
 
       try {

@@ -105,6 +105,7 @@ export const backupBtn = "بکاپ گرفتن از دیتابیس";
 export const broadcastBtn = "📣 پیام همگانی";
 export const broadcastSubsBtn = "📣 پیام به مشترکین";
 export const userCountBtn = "👥 تعداد کاربران";
+export const adminsBtn = "👮 ادمین‌ها";
 
 export const welcomeAdminTxt = `
 خوش اومدی!
