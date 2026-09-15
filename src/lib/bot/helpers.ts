@@ -80,6 +80,7 @@ export async function handleStartCommandForUser(ctx: Context, db: DB) {
 
 export async function handleImagesIncome(ctx: Context, db: DB) {
   const userID = ctx.from?.id!;
+  const buyerTag = formatBuyerTag(ctx);
 
   if (!ctx.message?.photo) {
     waitingForRenewImage.delete(userID);
@@ -114,7 +115,7 @@ export async function handleImagesIncome(ctx: Context, db: DB) {
         ctx,
         db,
         photo.file_id,
-        `درخواست تمدید از طرف کاربر\n${userID}\n\n${email}\n${type}`,
+        `درخواست تمدید از طرف کاربر\n${buyerTag}\n\n${email}\n${type}`,
         {
           inline_keyboard: [
             [
@@ -144,7 +145,7 @@ export async function handleImagesIncome(ctx: Context, db: DB) {
         ctx,
         db,
         photo.file_id,
-        `درخواست ساخت اکانت جدید از طرف کاربر\n${userID}\n\n${email}\n${type}`,
+        `درخواست ساخت اکانت جدید از طرف کاربر\n${buyerTag}\n\n${email}\n${type}`,
         {
           inline_keyboard: [
             [
@@ -199,6 +200,20 @@ export const handleRenewCallback = async (ctx: Context) => {
 /** Owner + sub-admins who review receipts (accept/decline only). */
 export function receiptReviewerIds(db: DB): number[] {
   return [ADMIN_ID, ...db.getAdmins()];
+}
+
+/** Buyer identity line for receipt captions: username (if any) + numeric ID. */
+function formatBuyerTag(ctx: Context): string {
+  const userID = ctx.from?.id!;
+  const username = ctx.from?.username?.trim();
+  const firstName = ctx.from?.first_name?.trim();
+  const lastName = ctx.from?.last_name?.trim();
+  const displayName = [firstName, lastName].filter(Boolean).join(" ");
+  const lines = username
+    ? [`@${username}`, `ID: ${userID}`]
+    : [`ID: ${userID}`];
+  if (displayName) lines.push(displayName);
+  return lines.join("\n");
 }
 
 async function notifyReceiptReviewers(
