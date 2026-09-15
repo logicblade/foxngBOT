@@ -1,7 +1,11 @@
 import { type Context, InlineKeyboard, InputFile } from "grammy";
+import type { Conversation } from "@grammyjs/conversations";
 import QRCode from "qrcode";
 import {
   bigGreet,
+  disableRenewTxt,
+  disableSellTxt,
+  greet,
   justImageTxt,
   noSubFoundTxt,
   reciptReceiveTxt,
@@ -11,11 +15,10 @@ import {
   welcomeAdminTxt,
   resetBtn,
   cancelBtn,
-  broadcastBtn,
 } from "./messages";
-import { adminMenu, broadcastConfirmMenu, mainMenu, renewMenu } from "./keyboards";
+import { adminMenu, backHomeMenu, broadcastConfirmMenu, cancelMenu, mainMenu, removeReplyKeyboard, renewMenu } from "./keyboards";
+import { PLANS, getPlan, paymentText } from "./plans";
 import type { DB } from "../../util/db";
-import type { Conversation } from "@grammyjs/conversations";
 import { db, WHICH_INBOUND } from "../..";
 import { getAllPanels, Panel } from "../panel/panel";
 import { Util } from "../../util/util";
@@ -36,9 +39,11 @@ export const pendingCreateConfig = new Set<number>();
 export const pendingCreateConfigType = new Map<number, ConfigPrice>();
 
 export const waitingForBroadcast = new Set<number>();
+export type BroadcastAudience = "all" | "subs";
+export const broadcastAudience = new Map<number, BroadcastAudience>();
 export const pendingBroadcast = new Map<
   number,
-  { text?: string; photoFileID?: string; caption?: string }
+  { text?: string; photoFileID?: string; caption?: string; audience: BroadcastAudience }
 >();
 
 export const state: State = {
@@ -54,10 +59,12 @@ export async function handleStartCommandForUser(ctx: Context, db: DB) {
   const init = db.getPanels().length !== 0;
   if (!init) {
     await ctx.reply("ربات هنوز توسط ادمین راه اندازی نشده است...", {
-      reply_markup: { remove_keyboard: true },
+      reply_markup: removeReplyKeyboard,
     });
     return;
   }
+  // Remove any legacy reply keyboard first, then show the inline main menu.
+  await ctx.reply(greet, { reply_markup: removeReplyKeyboard });
   await ctx.reply(bigGreet, { reply_markup: mainMenu });
 }
 
@@ -67,7 +74,7 @@ export async function handleImagesIncome(ctx: Context) {
   if (!ctx.message?.photo) {
     waitingForRenewImage.delete(userID);
     pendingConfig.delete(userID);
-    await ctx.reply(justImageTxt, { reply_markup: mainMenu });
+    await ctx.reply(justImageTxt, { reply_markup: backHomeMenu });
     return;
   } else {
     const photo = ctx.message.photo.at(-1);
@@ -105,7 +112,7 @@ export async function handleImagesIncome(ctx: Context) {
         },
       });
 
-      await ctx.reply(reciptReceiveTxt, { reply_markup: mainMenu });
+      await ctx.reply(reciptReceiveTxt, { reply_markup: backHomeMenu });
       return;
     } else if (waitingForCreateImage.has(userID)) {
       console.log("Creating new account for user", userID);
@@ -132,7 +139,7 @@ export async function handleImagesIncome(ctx: Context) {
         },
       });
 
-      await ctx.reply(reciptReceiveTxt, { reply_markup: mainMenu });
+      await ctx.reply(reciptReceiveTxt, { reply_markup: backHomeMenu });
       return;
     }
   }
@@ -227,7 +234,6 @@ export const handleCreateDeclineCallback = async (ctx: Context) => {
 
 export async function handleGetConfig(ctx: Context, db: DB) {
   const looking = await ctx.reply(searchingTxt);
-
   const panels = getAllPanels(db);
   let configs: UserConfig[] = [];
 
@@ -297,6 +303,176 @@ export async function handleCreateAccount(ctx: Context) {
   );
 }
 
+/** Shared plan selection for both buy and renew flows (text + callback). */
+export async function handlePlanSelection(
+  ctx: Context,
+  opts: { planId?: string; planText?: string },
+) {
+  const userID = ctx.from?.id!;
+  const plan =
+    getPlan(opts.planId) ??
+    (opts.planText ? PLANS.find((p) => p.buttonText === opts.planText) : undefined);
+  if (!plan) return;
+
+  if (pendingCreateConfig.has(userID)) {
+    pendingCreateConfig.delete(userID);
+    pendingCreateConfigType.set(userID, plan.id);
+    waitingForCreateImage.add(userID);
+    await ctx.reply(paymentText("buy", plan), {
+      parse_mode: "HTML",
+      reply_markup: cancelMenu,
+    });
+    if (ctx.callbackQuery?.message) {
+      await ctx.deleteMessage().catch(() => {});
+    }
+    return;
+  }
+
+  const uuid = pendingConfig.get(userID)?.UUID;
+  if (uuid) {
+    pendingConfigType.set(userID, plan.id);
+    waitingForRenewImage.add(userID);
+    await ctx.reply(paymentText("renew", plan), {
+      parse_mode: "HTML",
+      reply_markup: cancelMenu,
+    });
+    if (ctx.callbackQuery?.message) {
+      await ctx.deleteMessage().catch(() => {});
+    }
+  }
+}
+
+/** Inline "home" button: drop any pending order state and show main menu. */
+export async function handleMenuHome(ctx: Context) {
+  const userID = ctx.from?.id!;
+  waitingForRenewImage.delete(userID);
+  waitingForCreateImage.delete(userID);
+  pendingConfig.delete(userID);
+  pendingConfigType.delete(userID);
+  pendingCreateConfig.delete(userID);
+  pendingCreateConfigType.delete(userID);
+  waitingForBroadcast.delete(userID);
+  broadcastAudience.delete(userID);
+  pendingBroadcast.delete(userID);
+  try {
+    await ctx.editMessageText(`${bigGreet}`, { reply_markup: mainMenu });
+  } catch {
+    await ctx.reply(bigGreet, { reply_markup: mainMenu });
+  }
+  await ctx.answerCallbackQuery().catch(() => {});
+}
+
+/** Inline "cancel order" button: drop pending state, back to main menu. */
+export async function handleOrderCancel(ctx: Context) {
+  const userID = ctx.from?.id!;
+  waitingForRenewImage.delete(userID);
+  waitingForCreateImage.delete(userID);
+  pendingRenewals.delete(userID);
+  pendingCreates.delete(userID);
+  pendingConfig.delete(userID);
+  pendingConfigType.delete(userID);
+  pendingCreateConfig.delete(userID);
+  pendingCreateConfigType.delete(userID);
+  try {
+    await ctx.editMessageText(`${greet}`, { reply_markup: mainMenu });
+  } catch {
+    await ctx.reply(greet, { reply_markup: mainMenu });
+  }
+  await ctx.answerCallbackQuery().catch(() => {});
+}
+
+/** Inline user menu buttons (menu:*). */
+export async function handleUserMenuCallback(ctx: Context, db: DB) {
+  const data = ctx.callbackQuery?.data ?? "";
+  const action = data.replace("menu:", "");
+  await ctx.answerCallbackQuery().catch(() => {});
+  switch (action) {
+    case "buy":
+      if (!state.isSellActive) {
+        await ctx.reply(disableSellTxt, { reply_markup: backHomeMenu });
+        break;
+      }
+      await handleCreateAccount(ctx);
+      break;
+    case "renew":
+      if (!state.isRenewActive) {
+        await ctx.reply(disableRenewTxt, { reply_markup: backHomeMenu });
+        break;
+      }
+      await handleRenewAccount(ctx, db);
+      break;
+    case "status":
+      await handleCheckAccount(ctx, db);
+      break;
+    case "getconfig":
+      await handleGetConfig(ctx, db);
+      break;
+    case "tutorial":
+      await handleTutorial(ctx);
+      break;
+    case "contact":
+      await handleContact(ctx);
+      break;
+    case "home":
+      await handleMenuHome(ctx);
+      break;
+  }
+}
+
+/** Inline admin menu buttons (admin:*). Needs conversation-capable ctx. */
+export async function handleAdminMenuCallback(
+  ctx: Context & { conversation: { enter(name: string): Promise<void> } },
+  db: DB,
+) {
+  const data = ctx.callbackQuery?.data ?? "";
+  const action = data.replace("admin:", "");
+  await ctx.answerCallbackQuery().catch(() => {});
+  switch (action) {
+    case "panels":
+      await showPanelsListToAdmin(ctx, db);
+      break;
+    case "add":
+      await ctx.conversation.enter("addPanel");
+      break;
+    case "del":
+      await ctx.conversation.enter("removePanel");
+      break;
+    case "state":
+      await showAppStateToAdmin(ctx);
+      break;
+    case "trenew":
+      state.isRenewActive = !state.isRenewActive;
+      await showAppStateToAdmin(ctx);
+      break;
+    case "tsell":
+      state.isSellActive = !state.isSellActive;
+      await showAppStateToAdmin(ctx);
+      break;
+    case "broadcast":
+      broadcastAudience.set(ADMIN_ID, "all");
+      waitingForBroadcast.add(ADMIN_ID);
+      await ctx.reply(
+        "متن یا عکس بفرست تا همونو برای همه بفرستم. برای انصراف «لغو سفارش» یا بازگشت رو بزن.",
+        { reply_markup: backHomeMenu },
+      );
+      break;
+    case "broadcast-subs":
+      broadcastAudience.set(ADMIN_ID, "subs");
+      waitingForBroadcast.add(ADMIN_ID);
+      await ctx.reply(
+        "متن یا عکس بفرست تا همونو فقط برای کاربرایی که اشتراک دارن بفرستم. برای انصراف «لغو سفارش» یا بازگشت رو بزن.",
+        { reply_markup: backHomeMenu },
+      );
+      break;
+    case "backup":
+      await handleBackup(ctx);
+      break;
+    case "users":
+      await showUserCountToAdmin(ctx, db);
+      break;
+  }
+}
+
 export async function handleCheckAccount(ctx: Context, db: DB) {
   const looking = await ctx.reply(searchingTxt);
 
@@ -312,7 +488,7 @@ export async function handleCheckAccount(ctx: Context, db: DB) {
 
   await ctx.api.deleteMessage(ctx.from?.id!, looking.message_id);
   if (configs.length === 0) {
-    await ctx.reply(noSubFoundTxt, { reply_markup: mainMenu });
+    await ctx.reply(noSubFoundTxt, { reply_markup: backHomeMenu });
   } else {
     let statusTxt = "🔋وضعیت حساب شما:\n\n";
 
@@ -330,7 +506,7 @@ export async function handleCheckAccount(ctx: Context, db: DB) {
       statusTxt += `${conf.status ? (conf.isRenewable ? "🟡" : "🟢") : "🔴"} ${email} - ${statusWord}\nمانده: ${displayGB} گیگابایت\n\n`;
     }
 
-    await ctx.reply(statusTxt, { reply_markup: mainMenu });
+    await ctx.reply(statusTxt, { reply_markup: backHomeMenu });
   }
 }
 
@@ -641,43 +817,39 @@ export async function handleBroadcastMessage(
   const photo = ctx.message?.photo?.at(-1);
   const text = ctx.message?.text;
 
-  // Let menu navigation fall through to the normal switch.
-  if (
-    !photo &&
-    (text === resetBtn || text === cancelBtn || text === broadcastBtn)
-  ) {
-    waitingForBroadcast.delete(adminID);
-    return false;
-  }
-
   if (!photo && !text) {
     await ctx.reply("متن یا عکس بفرست تا همونو برای همه بفرستم. برای انصراف «لغو سفارش» یا بازگشت رو بزن.", {
-      reply_markup: adminMenu,
+      reply_markup: backHomeMenu,
     });
     return true;
   }
 
   if (text === "بیخیال") {
     waitingForBroadcast.delete(adminID);
+    broadcastAudience.delete(adminID);
     pendingBroadcast.delete(adminID);
-    await ctx.reply("اوکی، پیام همگانی کنسل شد.", { reply_markup: adminMenu });
+    await ctx.reply("اوکی، پیام همگانی کنسل شد.", { reply_markup: backHomeMenu });
     return true;
   }
 
+  const audience = broadcastAudience.get(adminID) ?? "all";
   if (photo) {
     pendingBroadcast.set(adminID, {
       photoFileID: photo.file_id,
       caption: ctx.message?.caption,
+      audience,
     });
   } else {
-    pendingBroadcast.set(adminID, { text: text! });
+    pendingBroadcast.set(adminID, { text: text!, audience });
   }
 
   waitingForBroadcast.delete(adminID);
+  broadcastAudience.delete(adminID);
 
-  const recipients = collectBroadcastRecipients(db);
+  const recipients = await collectBroadcastRecipients(db, audience);
+  const audienceLabel = audience === "subs" ? "مشترک (دارای اشتراک)" : "کاربر";
   await ctx.reply(
-    `این پیام قراره برای ${recipients.length} کاربر ارسال بشه. تایید میکنی؟`,
+    `این پیام قراره برای ${recipients.length} ${audienceLabel} ارسال بشه. تایید میکنی؟`,
     { reply_markup: broadcastConfirmMenu(recipients.length) },
   );
   const draft = pendingBroadcast.get(adminID);
@@ -691,40 +863,90 @@ export async function handleBroadcastMessage(
   return true;
 }
 
-function collectBroadcastRecipients(db: DB): number[] {
+/**
+ * Broadcast targets.
+ * - "all": everyone who ever started the bot (local users table).
+ * - "subs": only telegram IDs that own at least one client on any panel
+ *   (tgId / comment numeric match), intersected with known bot users.
+ */
+async function collectBroadcastRecipients(
+  db: DB,
+  audience: BroadcastAudience = "all",
+): Promise<number[]> {
   const ids = new Set<number>(db.getUserIds());
   ids.delete(ADMIN_ID);
-  return [...ids];
+  if (audience === "all") return [...ids];
+
+  const subscriberIds = await collectSubscriberIds(db);
+  return [...ids].filter((id) => subscriberIds.has(id));
 }
 
-export async function handleBroadcastConfirm(
-  ctx: Context,
-  db: DB,
-): Promise<boolean> {
+/** All telegram IDs that own ≥1 *enabled* panel client (tgId/comment fields). */
+async function collectSubscriberIds(db: DB): Promise<Set<number>> {
+  const subs = new Set<number>();
+  const addTgId = (raw: unknown) => {
+    const n = typeof raw === "number" ? raw : Number(raw);
+    if (Number.isSafeInteger(n) && n > 0 && n !== ADMIN_ID) subs.add(n);
+  };
+
+  const panels = getAllPanels(db);
+  for (const panel of panels) {
+    try {
+      const clients = await panel.getClients();
+      for (const c of clients?.obj ?? []) {
+        // Disabled/expired accounts don't count as "has an account".
+        const enabled = c.traffic ? c.traffic.enable : c.enable;
+        if (!enabled) continue;
+        addTgId(c.tgId ?? (c as { tgID?: unknown }).tgID);
+        addTgId(c.comment);
+      }
+    } catch (error) {
+      console.error(`collectSubscriberIds: getClients failed for ${panel.name}:`, error);
+    }
+    try {
+      const inbounds = await panel.getInbounds();
+      for (const obj of inbounds?.obj ?? []) {
+        const statsById = new Map(
+          (obj.clientStats ?? []).map((s) => [String(s.email), s.enable]),
+        );
+        const settingsClients = Array.isArray(obj.settings?.clients)
+          ? (obj.settings.clients as unknown as Array<Record<string, unknown>>)
+          : [];
+        for (const c of settingsClients) {
+          const enabled =
+            (c["enable"] as boolean | undefined) ??
+            statsById.get(String(c["email"])) ??
+            true;
+          if (!enabled) continue;
+          addTgId(c["tgId"] ?? c["tgID"]);
+          addTgId(c["comment"]);
+        }
+      }
+    } catch (error) {
+      console.error(`collectSubscriberIds: getInbounds failed for ${panel.name}:`, error);
+    }
+  }
+  return subs;
+}
+
+export async function executeBroadcast(ctx: Context, db: DB): Promise<boolean> {
   const adminID = ctx.from?.id!;
   const draft = pendingBroadcast.get(adminID);
-  if (!draft) return false;
-
-  const text = ctx.message?.text ?? "";
-  if (text === resetBtn || text === cancelBtn) {
-    pendingBroadcast.delete(adminID);
+  if (!draft) {
+    await ctx.answerCallbackQuery({ text: "پیش‌نویسی پیدا نکردم" }).catch(() => {});
     return false;
   }
 
-  const confirmMatch = text.match(/^تایید ارسال به (\d+) کاربر ✅$/);
-  if (!confirmMatch) return true;
-
   pendingBroadcast.delete(adminID);
+  await ctx.answerCallbackQuery().catch(() => {});
 
-  const recipients = collectBroadcastRecipients(db);
+  const recipients = await collectBroadcastRecipients(db, draft.audience);
   if (recipients.length === 0) {
-    await ctx.reply("کاربری برای ارسال پیدا نکردم.", { reply_markup: adminMenu });
+    await ctx.reply("کاربری برای ارسال پیدا نکردم.", { reply_markup: backHomeMenu });
     return true;
   }
 
-  await ctx.reply(`باشه، دارم برای ${recipients.length} کاربر میفرستم...`, {
-    reply_markup: adminMenu,
-  });
+  await ctx.reply(`باشه، دارم برای ${recipients.length} کاربر میفرستم...`);
 
   let sent = 0;
   let failed = 0;
@@ -746,9 +968,69 @@ export async function handleBroadcastConfirm(
   }
 
   await ctx.reply(`تموم شد ✅\n\nارسال موفق: ${sent}\nناموفق: ${failed}`, {
-    reply_markup: adminMenu,
+    reply_markup: backHomeMenu,
   });
   return true;
+}
+
+export async function cancelBroadcast(ctx: Context) {
+  pendingBroadcast.delete(ctx.from?.id!);
+  waitingForBroadcast.delete(ctx.from?.id!);
+  broadcastAudience.delete(ctx.from?.id!);
+  try {
+    await ctx.editMessageText("اوکی، پیام همگانی کنسل شد.", {
+      reply_markup: backHomeMenu,
+    });
+  } catch {
+    await ctx.reply("اوکی، پیام همگانی کنسل شد.", { reply_markup: backHomeMenu });
+  }
+  await ctx.answerCallbackQuery().catch(() => {});
+}
+
+export async function handleBroadcastConfirm(
+  ctx: Context,
+  db: DB,
+): Promise<boolean> {
+  const adminID = ctx.from?.id!;
+  const draft = pendingBroadcast.get(adminID);
+  if (!draft) return false;
+
+  const text = ctx.message?.text ?? "";
+  if (text === resetBtn || text === cancelBtn) {
+    pendingBroadcast.delete(adminID);
+    return false;
+  }
+
+  // Legacy text-based confirm (kept for backward compat); inline flow uses
+  // broadcast:confirm / broadcast:cancel callbacks instead.
+  const confirmMatch = text.match(/^تایید ارسال به (\d+) کاربر ✅$/);
+  if (!confirmMatch) return true;
+
+  return executeBroadcast(ctx, db);
+}
+
+export async function handleTutorial(ctx: Context) {
+  await ctx.reply("آموزش به زودی اضافه میشه! لطفا صبور باشید...", {
+    reply_markup: backHomeMenu,
+  });
+}
+
+export async function handleContact(ctx: Context) {
+  await ctx.reply(
+    `
+برای ارتباط با پشتیبانی میتونید به آیدی زیر پیام بدید 👇
+
+🆔: @foxngsup
+      `,
+    { reply_markup: backHomeMenu },
+  );
+}
+
+export async function showAppStateToAdmin(ctx: Context) {
+  await replyToAdmin(
+    ctx,
+    `وضعیت فعلی:\nخرید: ${state.isSellActive ? "فعال ✅" : "غیرفعال ❌"}\nتمدید: ${state.isRenewActive ? "فعال ✅" : "غیرفعال ❌"}`,
+  );
 }
 
 export async function handleBackup(ctx: Context) {
