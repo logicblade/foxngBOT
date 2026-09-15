@@ -35,7 +35,7 @@ import {
   waitingForCreateImage,
   waitingForRenewImage,
 } from "./helpers";
-import { adminMenu, mainMenu, subAdminMenu } from "./keyboards";
+import { adminMenu, mainMenu, subAdminMenu, withBackHomeButton } from "./keyboards";
 import { getPlan } from "./plans";
 import { type ConversationFlavor,
   conversations,
@@ -52,6 +52,24 @@ export class TelBot {
 
   constructor(token: string, db: DB) {
     this.bot = new Bot<ConversationFlavor<Context>>(token);
+
+    this.bot.api.config.use(async (prev, method, payload, signal) => {
+      if (
+        method === "sendMessage" ||
+        method === "sendPhoto" ||
+        method === "sendDocument" ||
+        method === "editMessageText"
+      ) {
+        const messagePayload = payload as {
+          reply_markup?: Parameters<typeof withBackHomeButton>[0];
+        };
+        messagePayload.reply_markup = withBackHomeButton(
+          messagePayload.reply_markup,
+        );
+      }
+
+      return await prev(method, payload, signal);
+    });
 
     this.bot.use(conversations());
     this.bot.use(createConversation(addPanelConv));
