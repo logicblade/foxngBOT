@@ -29,6 +29,13 @@ export class DB {
     bonus_gb INTEGER NOT NULL
   )
 `);
+
+    this.db.run(`
+  CREATE TABLE IF NOT EXISTS admins (
+    tg_id INTEGER PRIMARY KEY,
+    added_at INTEGER NOT NULL
+  )
+`);
   }
 
   addPanel(url: string, name: string, username: string, password: string) {
@@ -104,5 +111,37 @@ export class DB {
        ON CONFLICT(uuid) DO UPDATE SET bonus_gb = excluded.bonus_gb`,
       [uuid, bonusGB],
     );
+  }
+
+  /** Sub-admins (added by the owner via telegram ID). Owner is NOT stored here. */
+  addAdmin(tgId: number): boolean {
+    try {
+      this.db.run(`INSERT INTO admins (tg_id, added_at) VALUES (?, ?)`, [
+        tgId,
+        Date.now(),
+      ]);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  removeAdmin(tgId: number): boolean {
+    const result = this.db.run(`DELETE FROM admins WHERE tg_id = ?`, [tgId]);
+    return result.changes > 0;
+  }
+
+  isAdmin(tgId: number): boolean {
+    const row = this.db
+      .query(`SELECT 1 AS ok FROM admins WHERE tg_id = ?`)
+      .get(tgId) as { ok: number } | null;
+    return !!row;
+  }
+
+  getAdmins(): number[] {
+    const rows = this.db
+      .query(`SELECT tg_id FROM admins ORDER BY tg_id`)
+      .all() as { tg_id: number }[];
+    return rows.map((r) => r.tg_id);
   }
 }

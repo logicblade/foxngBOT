@@ -1,10 +1,25 @@
 export const greet = "به منو اصلی خوش برگشتی🔻";
-export const bigGreet = `
-سلام دوست من😍
-به ربات مدیریت اشتراک FoxNG خوش اومدی❤️
-به کمک دکمه ها میتونی اشتراکتو مدیریت کنی✅
-و اگه سوالی داشتی از دکمه ارتباط با پشتیبانی استفاده کن👨🏻‍💻
-`;
+export function bigGreet(firstName?: string): string {
+  const name = firstName?.trim();
+  const helloLine = name
+    ? `🌐 سلام ${name} عزیز! خوش اومدی به ربات FOXNG 🚀`
+    : `🌐 خوش اومدی به ربات FOXNG 🚀`;
+  return `${helloLine}
+🔐 اینترنت آزاد فقط چند کلیک با تو فاصله داره!
+
+✅  سرعت بالا، بدون قطعی
+✅  آیپی ثابت
+✅  پشتیبانی تا آخرین روز سرویس
+✅  ضمانت بازگشت وجه
+
+از منوی پایین شروع کن  👇🏼
+
+یا اگه نیاز به پشتیبانی داری به آیدی زیر پیام بده:
+
+🆔: @FOXNGsup`;
+}
+export const planFeaturesNote = `⏳ بدون محدودیت زمانی | 🌐 آیپی ثابت ✅
+تمامی اشتراک‌ها بدون محدودیت زمانی هستن و با آیپی ثابت ارائه می‌شن`;
 export const mySubBtn = "⏳ وضعیت اشتراک من";
 export const testConfBtn = "✅ دریافت کانفیگ تست";
 export const buySubBtn = "🚀 خرید اشتراک جدید";
@@ -29,13 +44,13 @@ export const buySubTxt = `
 `;
 export const searchingTxt = "⏳ در حال جستجو...";
 export const disableSellTxt = `
-کاربر عزیز، متاسفانه در حال حاضر امکان خرید اشتراک جدید وجود ندارد 😓⛔️
+کاربر عزیز، متاسفانه در حال حاضر امکان خرید اشتراک جدید وجود ندارد ⛔️
 `;
 export const disableRenewTxt = `
-کاربر عزیز، متاسفانه در حال حاضر امکان تمدید اشتراک وجود ندارد 😓⛔️
+کاربر عزیز، متاسفانه در حال حاضر امکان تمدید اشتراک وجود ندارد ⛔️
 `;
 export const noSubFoundTxt = `
-کاربر عزیز، اشتراک شما پیدا نشد 😓⛔️
+کاربر عزیز، اشتراک شما پیدا نشد ⛔️
 
 جهت خرید اشتراک از دکمه
 "🚀 خرید اشتراک جدید" استفاده کنید 👇
@@ -103,7 +118,9 @@ export const changeSellStateBtn = "تغییر وضعیت خرید";
 export const changeRenewStateBtn = "تغییر وضعیت تمدید";
 export const backupBtn = "بکاپ گرفتن از دیتابیس";
 export const broadcastBtn = "📣 پیام همگانی";
+export const broadcastSubsBtn = "📣 پیام به مشترکین";
 export const userCountBtn = "👥 تعداد کاربران";
+export const adminsBtn = "👮 ادمین‌ها";
 
 export const welcomeAdminTxt = `
 خوش اومدی!
