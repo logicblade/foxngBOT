@@ -1,4 +1,5 @@
 import { type Context, InlineKeyboard, InputFile } from "grammy";
+import { calculateDisplayedTraffic, formatDisplayedTrafficGB } from "../../util/displayTraffic";
 import type { Conversation } from "@grammyjs/conversations";
 import QRCode from "qrcode";
 import {
@@ -714,8 +715,11 @@ export async function handleCheckAccount(ctx: Context, db: DB) {
     for (const conf of configs) {
       const email = Util.removeEmoji(conf.email);
       const bonus = db.getClientBonus(conf.uuid) ?? Util.inferBonusGB(conf.totalGB);
-      const displayGB = Util.formatGB(
-        Util.displayRemainingGB(conf.totalGB, conf.remainingGB, bonus),
+      const actualLimitGB = Util.bytesToGigs(conf.totalGB);
+      const actualRemainingGB = Util.bytesToGigs(conf.remainingGB);
+      const purchasedGB = actualLimitGB + Math.max(0, bonus);
+      const displayGB = formatDisplayedTrafficGB(
+        calculateDisplayedTraffic(purchasedGB, actualLimitGB, actualRemainingGB),
       );
       const statusWord = conf.status
         ? conf.isRenewable
