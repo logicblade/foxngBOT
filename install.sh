@@ -49,8 +49,11 @@ else
   echo "Bun already installed."
 fi
 
-BUN_BIN="$(command -v bun)"
-if [ -z "$BUN_BIN" ]; then
+BUN_BIN="$HOME/.bun/bin/bun"
+if [ ! -x "$BUN_BIN" ]; then
+  BUN_BIN="$(command -v bun || true)"
+fi
+if [ -z "$BUN_BIN" ] || [ ! -x "$BUN_BIN" ]; then
   echo "Bun installation completed but the bun executable was not found."
   exit 1
 fi
