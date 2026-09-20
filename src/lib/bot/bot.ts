@@ -452,6 +452,15 @@ export class TelBot {
       await ctx.answerCallbackQuery().catch(() => {});
     });
 
+    this.bot.callbackQuery("owner:panel:add", async (ctx) => {
+      if (!isOwner(ctx.from?.id!)) {
+        await ctx.answerCallbackQuery({ text: "⛔ فقط مالک" });
+        return;
+      }
+      await ctx.conversation.enter("addPanelConv");
+      await ctx.answerCallbackQuery().catch(() => {});
+    });
+
     this.bot.callbackQuery(/^panel:replace:/, async (ctx) => {
       if (!isOwner(ctx.from?.id!)) {
         await ctx.answerCallbackQuery({ text: "⛔ فقط مالک" });

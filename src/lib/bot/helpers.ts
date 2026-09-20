@@ -21,6 +21,7 @@ import {
   backToMainMenu,
   cancelActionMenu,
   discountManagementMenu,
+  initialOwnerMenu,
   orderDecisionMenu,
   ownerMainMenu,
   panelsMenu,
@@ -818,7 +819,7 @@ export async function handleStartCommandForAdmin(ctx: Context, db: DB) {
   }
   const init = db.getPanels().length !== 0;
   if (!init) {
-    await ctx.reply(welcomeAdminTxt, { reply_markup: backToAdminMainMenu() });
+    await ctx.reply(welcomeAdminTxt, { reply_markup: initialOwnerMenu() });
   } else {
     await showPrivilegedMain(ctx, db);
   }

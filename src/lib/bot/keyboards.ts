@@ -30,6 +30,10 @@ export function backToAdminMainMenu(): InlineKeyboard {
   return new InlineKeyboard().text("🔙 بازگشت به منوی اصلی", CB.adminMain);
 }
 
+export function initialOwnerMenu(): InlineKeyboard {
+  return new InlineKeyboard().text("➕ افزودن پنل", "owner:panel:add");
+}
+
 export function planMenu(prefix: "buy" | "renew", plans = PLANS, discountPercent = 0): InlineKeyboard {
   const kb = new InlineKeyboard();
   for (const p of plans) {
@@ -121,6 +125,7 @@ export function appStateMenu(isSellActive: boolean, isRenewActive: boolean): Inl
 export function panelsMenu(panels: { id: number; name: string }[]): InlineKeyboard {
   const kb = new InlineKeyboard();
   for (const p of panels) kb.text(`🔁 جایگزینی: ${p.name}`, `panel:replace:${p.id}`).row();
+  kb.text("➕ افزودن پنل", "owner:panel:add").row();
   kb.text("🔙 بازگشت به منوی اصلی", CB.adminMain);
   return kb;
 }
