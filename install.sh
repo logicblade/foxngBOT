@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# FoxNGBot installer v3
 
 set -e
 
