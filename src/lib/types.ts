@@ -1,10 +1,10 @@
-interface State {
+export interface State {
   isSellActive: boolean;
   isRenewActive: boolean;
 }
 
 /// Helper type for database
-interface Credential {
+export interface Credential {
   id: number;
   url: string;
   name: string;
@@ -12,22 +12,69 @@ interface Credential {
   password: string;
 }
 
-type ConfigPrice = "250" | "450";
+export type OrderType = "buy" | "renew";
+export type OrderStatus = "PENDING" | "APPROVED" | "REJECTED" | "CANCELLED";
 
-interface PendingRenewConfig {
+export interface Order {
+  id: number;
+  tg_id: number;
+  tg_name: string;
+  tg_username: string | null;
+  type: OrderType;
+  plan_id: string;
+  volume_gb: number;
+  duration_days: number;
+  price: number;
+  receipt_file_id: string | null;
+  receipt_kind: string | null;
+  status: OrderStatus;
+  target_uuid: string | null;
+  target_inbound_id: number | null;
+  created_at: number;
+  decided_at: number | null;
+  decided_by: number | null;
+}
+
+export interface BotUser {
+  tg_id: number;
+  /** Present in the new schema; absent in the legacy FoxNG `users` table. */
+  first_name?: string | null;
+  username?: string | null;
+  started_at?: number;
+  last_seen_at?: number;
+}
+
+export interface BotAdmin {
+  tg_id: number;
+  /** Present in the new schema only. */
+  added_by?: number | null;
+  added_at: number;
+}
+
+export interface Plan {
+  id: string;
+  volumeGB: number;
+  days: number;
+  price: number;
+  label: string;
+}
+
+export type ConfigPrice = "250" | "450";
+
+export interface PendingRenewConfig {
   UUID: string;
   inboundID: number;
 }
 
-type Result = "okay" | "error";
+export type Result = "okay" | "error";
 
-interface LoginUser {
+export interface LoginUser {
   username: string;
   password: string;
 }
 
-type UUID = string | null;
-interface UUIDResponse {
+export type UUID = string | null;
+export interface UUIDResponse {
   success: string;
   msg: string;
   obj: {
@@ -36,13 +83,13 @@ interface UUIDResponse {
 }
 
 /// New 3X-UI client-centric API (/panel/api/clients/*)
-interface PanelClientTraffic {
+export interface PanelClientTraffic {
   up: number;
   down: number;
   enable: boolean;
 }
 
-interface PanelClient {
+export interface PanelClient {
   id: number;
   email: string;
   subId?: string;
@@ -68,19 +115,19 @@ interface PanelClient {
   down?: number;
 }
 
-interface GetClientsResponse {
+export interface GetClientsResponse {
   success: boolean;
   msg: string;
   obj: PanelClient[];
 }
 
-interface GetClientResponse {
+export interface GetClientResponse {
   success: boolean;
   msg: string;
   obj: PanelClient;
 }
 
-interface NewPanelClient {
+export interface NewPanelClient {
   email: string;
   uuid?: string;
   totalGB: number;
@@ -93,11 +140,11 @@ interface NewPanelClient {
   flow?: string;
 }
 
-interface PanelClientPayload extends NewPanelClient {
+export interface PanelClientPayload extends NewPanelClient {
   email: string;
 }
 
-interface UserConfig {
+export interface UserConfig {
   email: string;
   inboundID: number;
   inboundRemark: string;
@@ -106,27 +153,30 @@ interface UserConfig {
   isRenewable: boolean;
   isOff: boolean;
   hasStarted: boolean;
+  remainingBytes: number;
+  totalBytes: number;
+  expiryTime: number;
 }
 
-interface ExpiryCheckUser {
+export interface ExpiryCheckUser {
   email: string;
   tgID: string | number;
   remark: string;
 }
 
-interface GetInboundsResponse {
+export interface GetInboundsResponse {
   success: boolean;
   msg: string;
   obj: Obj[];
 }
 
-interface GetInboundResponse {
+export interface GetInboundResponse {
   success: boolean;
   msg: string;
   obj: Obj;
 }
 
-interface Obj {
+export interface Obj {
   id: number;
   up: number;
   down: number;
@@ -147,7 +197,7 @@ interface Obj {
   sniffing: string;
 }
 
-interface ClientStat {
+export interface ClientStat {
   id: number;
   inboundId: number;
   enable: boolean;
@@ -163,14 +213,14 @@ interface ClientStat {
   lastOnline: number;
 }
 
-interface Settings {
+export interface Settings {
   clients: Client[];
   decryption?: string;
   encryption?: string;
   testseed?: number[];
 }
 
-interface Client {
+export interface Client {
   comment: string;
   created_at: number;
   email: string;
@@ -188,10 +238,15 @@ interface Client {
   security?: string;
 }
 
-interface StreamSettings {
+export interface StreamSettings {
   network: string;
   security: string;
   externalProxy: ExternalProxy[];
+  wsSettings?: {
+    path?: string;
+    host?: string;
+    headers?: Record<string, string>;
+  };
   tcpSettings: {
     acceptProxyProtocol: boolean;
     header: {
@@ -215,25 +270,25 @@ interface StreamSettings {
   kcpSettings: KcpSettings;
 }
 
-interface ExternalProxy {
+export interface ExternalProxy {
   forceTls: string;
   dest: string;
   port: number;
   remark: string;
 }
 
-interface ConfigJSON {
+export interface ConfigJSON {
   success: boolean;
   msg: string;
   obj: ObjJSON;
 }
 
-interface ObjJSON {
+export interface ObjJSON {
   api: API;
   burstObservatory: null;
   dns: null;
   fakedns: null;
-  inbounds: Inbound[];
+  inbounds: ConfigInbound[];
   log: Log;
   metrics: Metrics;
   observatory: null;
@@ -245,12 +300,12 @@ interface ObjJSON {
   transport: null;
 }
 
-interface API {
+export interface API {
   services: string[];
   tag: string;
 }
 
-interface Inbound {
+export interface ConfigInbound {
   listen: null | string;
   port: number;
   protocol: string;
@@ -260,36 +315,36 @@ interface Inbound {
   tag: string;
 }
 
-interface InboundSettings {
+export interface InboundSettings {
   address?: string;
-  clients?: Client[];
+  clients?: InboundClient[];
   decryption?: string;
   encryption?: string;
   testseed?: number[];
 }
 
-interface Client {
+export interface InboundClient {
   email: string;
   flow?: string;
   id: string;
   password?: string;
 }
 
-interface Sniffing {
+export interface Sniffing {
   destOverride: DestOverride[];
   enabled: boolean;
   metadataOnly: boolean;
   routeOnly: boolean;
 }
 
-enum DestOverride {
+export enum DestOverride {
   Fakedns = "fakedns",
   HTTP = "http",
   Quic = "quic",
   TLS = "tls",
 }
 
-interface KcpSettings {
+export interface KcpSettings {
   congestion: boolean;
   downlinkCapacity: number;
   header: Header;
@@ -301,11 +356,11 @@ interface KcpSettings {
   writeBufferSize: number;
 }
 
-interface Header {
+export interface Header {
   type: string;
 }
 
-interface Log {
+export interface Log {
   access: string;
   dnsLog: boolean;
   error: string;
@@ -313,50 +368,50 @@ interface Log {
   maskAddress: string;
 }
 
-interface Metrics {
+export interface Metrics {
   listen: string;
   tag: string;
 }
 
-interface Outbound {
+export interface Outbound {
   protocol: string;
   settings: OutboundSettings;
   tag: string;
 }
 
-interface OutboundSettings {
+export interface OutboundSettings {
   domainStrategy?: string;
   noises?: any[];
   redirect?: string;
 }
 
-interface Policy {
+export interface Policy {
   levels: Levels;
   system: System;
 }
 
-interface Levels {
+export interface Levels {
   "0": The0;
 }
 
-interface The0 {
+export interface The0 {
   statsUserDownlink: boolean;
   statsUserUplink: boolean;
 }
 
-interface System {
+export interface System {
   statsInboundDownlink: boolean;
   statsInboundUplink: boolean;
   statsOutboundDownlink: boolean;
   statsOutboundUplink: boolean;
 }
 
-interface Routing {
+export interface Routing {
   domainStrategy: string;
   rules: Rule[];
 }
 
-interface Rule {
+export interface Rule {
   inboundTag?: string[];
   outboundTag: string;
   type: string;
@@ -364,4 +419,4 @@ interface Rule {
   protocol?: string[];
 }
 
-interface Stats {}
+export interface Stats {}

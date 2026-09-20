@@ -21,8 +21,23 @@ Be sure to check the generated .env file.
 
 ```text
 BOT_TOKEN=Your-Telegram-Bot-Token-From-BotFather
-ADMIN_ID=Your-Admins-Telegram-ID
+OWNER_ID=Your-Telegram-User-ID        # full access: stats, broadcast, backup, add admin
+ADMIN_ID=Your-Telegram-User-ID        # legacy alias, also treated as owner
+SUPPORT_ID=@foxngsup                  # support contact shown to users
+CARD_NUMBER=5029081059314381          # payment card shown in the receipt step
+CARD_OWNER=Card Holder Name
 ```
+
+### Roles
+
+- **OWNER** (`OWNER_ID` / `ADMIN_ID`): full access, can add/remove admins, broadcasts, subscriber
+  broadcast, database backup, statistics, and receipt review (approve/reject).
+- **ADMIN** (added by the owner through «➕ افزودن ادمین», stored in the `admins` table): can only
+  review receipts and approve/reject orders.
+- **USER**: subscription purchase/renewal, volume status and support only.
+
+All protected callback handlers re-check the caller's role server-side, so hiding buttons is not the
+only protection.
 
 ## Configuration
 

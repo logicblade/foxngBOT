@@ -1,32 +1,25 @@
-export const greet = "به منو اصلی خوش برگشتی🔻";
-export const bigGreet = `
-سلام دوست من😍
-به ربات مدیریت اشتراک FoxNG خوش اومدی❤️
-به کمک دکمه ها میتونی اشتراکتو مدیریت کنی✅
-و اگه سوالی داشتی از دکمه ارتباط با پشتیبانی استفاده کن👨🏻‍💻
-`;
-export const mySubBtn = "⏳ وضعیت اشتراک من";
-export const testConfBtn = "✅ دریافت کانفیگ تست";
-export const buySubBtn = "🚀 خرید اشتراک جدید";
-export const renewSubBtn = "♻️ تمدید اشتراک";
-export const contactTxt = "👨🏼‍💻 ارتباط با پشتیبانی";
-export const tutorialBtnTxt = "⚙️ آموزش اتصال به کانفیگ";
-export const getConfigBtn = "🔗 دریافت دوباره لینک کانفیگ";
-export const resetBtn = "بازگشت به منو اصلی 🔙";
-export const cancelBtn = "لغو سفارش";
-export const creatingTestConfTxt = `در حال ساختن کانفیگ تست
-لطفا صبر کنید...`;
-export const welcomeTxt =
-  "کاربر عزیز، جهت استفاده از ربات برای پیگیری سفارش و دریافت پشتیبانی، لطفا با استفاده از دکمه زیر، شماره همراه خود را ثبت کنید 👇";
-export const buySubTxt = `
-اگر قبلا اشتراک خریدی
-از دکمه " ♻️ تمدید اشتراک"
-یا /renew استفاده کن
+import type { Plan } from "../types";
+import { Util } from "../../util/util";
 
-و اگر اشتراک نداری، برای خرید اشتراک به آیدی زیر پیام بده 👇
+export const SUPPORT_ID = process.env.SUPPORT_ID || "@foxngsup";
+export const CARD_NUMBER = process.env.CARD_NUMBER || "5029081059314381";
+export const CARD_OWNER = process.env.CARD_OWNER || "شایان براقی - توسعه تعاون";
 
-🆔: @foxngsup
-`;
+export function startMessage(name: string) {
+  return `🌐 سلام ${name} عزیز! خوش اومدی به ربات FOXNG 🚀
+🔐 اینترنت آزاد فقط چند کلیک با تو فاصله داره!
+
+✅ سرعت بالا، بدون قطعی
+✅ آیپی ثابت
+✅ پشتیبانی تا آخرین روز سرویس
+✅ ضمانت بازگشت وجه
+
+از منوی پایین شروع کن 👇🏼`;
+}
+
+export function supportMessage() {
+  return `برای ارتباط با پشتیبانی می‌تونید به آیدی زیر پیام بدید 👇\n\n🆔: ${SUPPORT_ID}`;
+}
 export const searchingTxt = "⏳ در حال جستجو...";
 export const disableSellTxt = `
 کاربر عزیز، متاسفانه در حال حاضر امکان خرید اشتراک جدید وجود ندارد 😓⛔️
@@ -34,126 +27,72 @@ export const disableSellTxt = `
 export const disableRenewTxt = `
 کاربر عزیز، متاسفانه در حال حاضر امکان تمدید اشتراک وجود ندارد 😓⛔️
 `;
-export const noSubFoundTxt = `
-کاربر عزیز، اشتراک شما پیدا نشد 😓⛔️
-
-جهت خرید اشتراک از دکمه
-"🚀 خرید اشتراک جدید" استفاده کنید 👇
-`;
+export const noSubFoundTxt = `شما در حال حاضر اشتراک فعالی ندارید. 😓`;
 export const subFoundTxt = `
 اشتراکی که میخوای تمدید کنی انتخاب کن: 👇🚀
 
-⚠️توجه: فقط اشتراک هایی که نزدیک انقضا هستن یا منقضی شدن قابل تمدیدن!
-
 🟢: اشتراک فعال
-🟡: اشتراک فعال ولی نزدیک انقضاست
-🟠: تا حالا به اشتراک وصل نشدی
 🔴: اشتراک منقضی شده
 `;
 export const subFoundGetConfTxt = `
 اشتراکی که لینکشو میخوای انتخاب کن: 👇🚀
 `;
-export const statusEnabledTxt = `
-اشتراک شما هنوز فعال است.
-اگه برای اتصال مشکلی داری، به آیدی پشتیبان پیام بده. 👇
+export const statusEnabledTxt = `اشتراک شما هنوز فعال است.
+اگه برای اتصال مشکلی داری، به آیدی پشتیبانی پیام بده. 👇`;
 
-🆔: @foxngsup
-`;
-export const statusNotStartedtxt = `
-اشتراک شما فعال است اما هنوز بهش وصل نشدی.
+export function withSupport(text: string) {
+  return `${text}\n\n🆔: ${SUPPORT_ID}`;
+}
+export const statusNotStartedtxt = `اشتراک شما فعال است اما هنوز بهش وصل نشدی.
 
-اگه برای اتصال مشکلی داری، به آیدی پشتیبان پیام بده. 👇
+اگه برای اتصال مشکلی داری، به آیدی پشتیبانی پیام بده. 👇`;
+export const statusOffTxt = `متاسفانه امکان تمدید اشتراک شما وجود ندارد.
 
-🆔: @foxngsup
-`;
-export const statusOffTxt = `
-متاسفانه امکان تمدید اشتراک شما وجود ندارد.
+با پشتیبانی در ارتباط باشید👇🏼`;
 
-با پشتیبانی در ارتباط باشید👇🏼
+export function discountedPlan(plan: Plan, discountPercent: number): Plan {
+  if (discountPercent <= 0) return plan;
+  const discountedPrice = Math.round(plan.price - (plan.price * discountPercent) / 100);
+  return {
+    ...plan,
+    price: discountedPrice,
+    label: `🔥 ${discountPercent}٪ | ${plan.volumeGB} گیگ | اصلی: ${Util.formatPrice(plan.price)} | نهایی: ${Util.formatPrice(discountedPrice)} تومان`,
+  };
+}
 
-🆔: @foxngsup
-`;
-export const renewTxt250 = `
-💵هزینه تمدید اشتراک شما: 
-  ✅250 هزار تومان
+export function paymentText(kind: "buy" | "renew", plan: Plan, originalPrice?: number) {
+  const title = kind === "buy" ? "خرید" : "تمدید";
+  const price = originalPrice && originalPrice !== plan.price
+    ? `🔥 تخفیف فعال\nقیمت اصلی: ${Util.formatPrice(originalPrice)} تومان\nقیمت با تخفیف: ${Util.formatPrice(plan.price)} تومان`
+    : `✅ ${Util.formatPrice(plan.price)} تومان`;
+  return `💵 هزینه ${title} اشتراک شما:
+${price}
+📦 ${plan.volumeGB} گیگ | ⏳ ${plan.days} روزه
 
-💳شایان براقی - توسعه تعاون💳
+💳 ${CARD_OWNER} 💳
 
-<blockquote><code>5029081059314381</code></blockquote>
+<blockquote><code>${CARD_NUMBER}</code></blockquote>
 🚨(برای کپی کردن شماره کارت روی آن کلیک کنید)
 
 
 ⚠️توجه⚠️
-‼️عکس رسید تراکنش خود را همینجا بفرستید تا اشتراک شما به صورت خودکار فعال شود‼️
-`;
-export const renewTxt450 = `
-💵هزینه تمدید اشتراک شما: 
-  ✅450 هزار تومان
+‼️عکس رسید تراکنش خود را همینجا بفرستید تا بعد از تایید ادمین اشتراک شما فعال شود‼️`;
+}
+export const reciptReceiveTxt = `با تشکر | رسید شما دریافت شد ✅
+سفارش شما با وضعیت در انتظار بررسی ثبت شد. بعد از بررسی ادمین نتیجه از همین ربات بهتون اطلاع داده می‌شه…❤️`;
+export const PLANS: Plan[] = [
+  { id: "p10", volumeGB: 10, days: 60, price: 150000, label: "📦 10 گیگ | ⏳ 60 روزه | 💰 150,000 تومان" },
+  { id: "p20", volumeGB: 20, days: 60, price: 300000, label: "📦 20 گیگ | ⏳ 60 روزه | 💰 300,000 تومان" },
+  { id: "p30", volumeGB: 30, days: 60, price: 450000, label: "📦 30 گیگ | ⏳ 60 روزه | 💰 450,000 تومان" },
+  { id: "p50", volumeGB: 50, days: 60, price: 750000, label: "📦 50 گیگ | ⏳ 60 روزه | 💰 750,000 تومان" },
+  { id: "p100", volumeGB: 100, days: 90, price: 1500000, label: "📦 100 گیگ | ⏳ 90 روزه | 💰 1,500,000 تومان" },
+];
 
-💳شایان براقی - توسعه تعاون💳
+export const justImageTxt = `شرمنده فقط عکس رسید قبوله!
+لطفا عکس رسید تراکنش را همینجا بفرستید.`;
 
-<blockquote><code>5029081059314381</code></blockquote>
-🚨(برای کپی کردن شماره کارت روی آن کلیک کنید)
-
-
-⚠️توجه⚠️
-‼️عکس رسید تراکنش خود را همینجا بفرستید تا اشتراک شما به صورت خودکار فعال شود‼️
-`;
-export const reciptReceiveTxt = `
-با تشکر | رسید شما دریافت شد ✅
-بعد از بررسی ادمین تا چند لحظه دیگه اشتراک شما فعال و از همین ربات بهتون اطلاع میدیم…❤️
-`;
-export const oneM40G = "اشتراک 1 ماهه 40 گیگابایت - 250 هزار تومان";
-export const oneM80G = "اشتراک 1 ماهه 80 گیگابایت - 450 هزار تومان";
-
-export const justImageTxt = `
-شرمنده فقط عکس قبوله!
-برو از اول!
-
-البته اگه تراکنش انجام شده ولی عکس رسید رو نداری با پشتیبان در ارتباط باش👇
-
-🆔: @foxngsup
-`;
-
-export const myPanelsBtn = "پنل های من";
-export const addPanelBtn = "اضافه کردن پنل";
-export const deletePanelBtn = "حذف کردن پنل";
-export const appStateBtn = "وضعیت خرید و تمدید";
-export const changeSellStateBtn = "تغییر وضعیت خرید";
-export const changeRenewStateBtn = "تغییر وضعیت تمدید";
-export const backupBtn = "بکاپ گرفتن از دیتابیس";
-
-export const welcomeAdminTxt = `
-خوش اومدی!
+export const welcomeAdminTxt = `خوش اومدی!
 
 فعلا ربات غیرفعاله چون هنوز پنلی نداریم.
 
-کارو با اضافه کردن پنل شروع کن!
-`;
-
-export const buyTxt250 = `
-💵هزینه خرید اشتراک شما: 
-  ✅250 هزار تومان
-
-💳شایان براقی - توسعه تعاون💳
-
-<blockquote><code>5029081059314381</code></blockquote>
-🚨(برای کپی کردن شماره کارت روی آن کلیک کنید)
-
-
-⚠️توجه⚠️
-‼️عکس رسید تراکنش خود را همینجا بفرستید تا اشتراک شما به صورت خودکار فعال شود‼️
-`;
-export const buyTxt450 = `
-💵هزینه خرید اشتراک شما: 
-  ✅450 هزار تومان
-
-💳شایان براقی - توسعه تعاون💳
-
-<blockquote><code>5029081059314381</code></blockquote>
-🚨(برای کپی کردن شماره کارت روی آن کلیک کنید)
-
-
-⚠️توجه⚠️
-‼️عکس رسید تراکنش خود را همینجا بفرستید تا اشتراک شما به صورت خودکار فعال شود‼️
-`;
+کارو با اضافه کردن پنل شروع کن!`;

@@ -1,16 +1,15 @@
 import dotenv from "dotenv";
-import { DB } from "./util/db";
+import { db, WHICH_INBOUND, WHICH_PANEL } from "./lib/config";
 import { TelBot } from "./lib/bot/bot";
 import { ADMIN_ID } from "./lib/bot/helpers";
 import { CronJob } from "cron";
 import { informUserExpiry } from "./lib/bot/remider";
 
-export const WHICH_PANEL = "direct1";
-export const WHICH_INBOUND = "1";
-
+// Load .env before anything reads process.env (bun also auto-loads it).
 dotenv.config({ quiet: true });
 
-export const db = new DB();
+// Re-exported for backwards compatibility.
+export { db, WHICH_INBOUND, WHICH_PANEL };
 
 export const bot = new TelBot(process.env.BOT_TOKEN!, db);
 

@@ -73,12 +73,16 @@ fi
 echo
 echo "Configure environment variables:"
 read -p "  BOT_TOKEN: Your Telegram bot token (from BotFather): " BOT_TOKEN
-read -p "  ADMIN_ID: Your Telegram user ID (for admin access): " ADMIN_ID
+read -p "  ADMIN_ID: Your Telegram user ID (bot owner, full access): " ADMIN_ID
+read -p "  SUPPORT_ID: Support contact shown to users (default @foxngsup): " SUPPORT_ID
+SUPPORT_ID=${SUPPORT_ID:-@foxngsup}
 
 # Write .env reliably
 cat > "$INSTALL_DIR/.env" <<EOF
 BOT_TOKEN=${BOT_TOKEN}
+OWNER_ID=${ADMIN_ID}
 ADMIN_ID=${ADMIN_ID}
+SUPPORT_ID=${SUPPORT_ID}
 EOF
 
 chmod 600 "$INSTALL_DIR/.env"

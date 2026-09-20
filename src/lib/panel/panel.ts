@@ -1,6 +1,25 @@
 import { fetch } from "bun";
 import type { DB } from "../../util/db";
 import { Util } from "../../util/util";
+import type {
+  ConfigJSON,
+  GetClientResponse,
+  GetClientsResponse,
+  GetInboundResponse,
+  GetInboundsResponse,
+  NewPanelClient,
+  Obj,
+  PanelClientPayload,
+  Result,
+  Settings,
+  StreamSettings,
+  UserConfig,
+} from "../types";
+
+/** Cooldown applied to a panel after a soft login failure (retry the next approval). */
+const LOGIN_BACKOFF_MS = 60_000;
+/** 3x-ui bans ip+username for 15 min after 5 failed logins in 5 min. Mirror that to avoid pointless 403 retries. */
+const LOGIN_BAN_COOLDOWN_MS = 15 * 60_000;
 
 export function getAllPanels(db: DB) {
   let panels: Panel[] = [];
@@ -15,15 +34,41 @@ export function getAllPanels(db: DB) {
   return panels;
 }
 
+/** Thrown when a panel operation can't proceed because login/panel access failed. */
+export class PanelLoginError extends Error {
+  panelName: string;
+
+  constructor(panelName: string, message = "panel login failed") {
+    super(`${message} for panel "${panelName}"`);
+    this.name = "PanelLoginError";
+    this.panelName = panelName;
+  }
+}
+
 export class Panel {
+  /**
+   * Panel instances are short-lived (they are recreated for each bot update),
+   * so a per-instance cooldown would not stop repeated login attempts. Keep
+   * this state process-wide, keyed by the panel endpoint and account.
+   */
+  private static loginBackoffUntilByPanel = new Map<string, number>();
   private INBOUNDS_PATH = "/panel/api/inbounds";
   private CLIENTS_PATH = "/panel/api/clients";
   private LOGIN_PATH = "/login";
   private UUID_ABS_PATH = "/panel/api/server/getNewUUID";
   private STATUS_ABS_PATH = "/panel/api/server/status";
 
-  headers = new Headers();
+    headers = new Headers();
   private lastLogins = new Map<string, number>();
+  private lastLoginIssue: string | null = null;
+  private csrfToken: string | null = null;
+  /** Timestamp until which we must NOT retry logging in to this panel (rate-limit ban / backoff). */
+  private loginBackoffUntil: number = 0;
+
+  /** Human-readable reason of the most recent login failure (null on success). */
+  get loginIssue(): string | null {
+    return this.lastLoginIssue;
+  }
 
   name: string;
   url: string;
@@ -32,12 +77,54 @@ export class Panel {
 
   constructor(name: string, url: string, usename: string, password: string) {
     this.headers.set("Content-Type", "application/json");
-    this.headers.set("Accept", "application/json");
+    this.headers.set("Accept", "application/json, text/plain, */*");
+    // A normal browser User-Agent avoids 403s from reverse proxies / WAFs that
+    // block default bot clients (Bun's default UA is "Bun/x.y.z").
+    this.headers.set(
+      "User-Agent",
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36",
+    );
 
     this.name = name;
     this.url = url;
     this.username = usename;
     this.password = password;
+  }
+
+  private loginKey() {
+    return `${this.url}|${this.username}`;
+  }
+
+  private setLoginBackoff(durationMs: number) {
+    const until = Date.now() + durationMs;
+    this.loginBackoffUntil = until;
+    Panel.loginBackoffUntilByPanel.set(this.loginKey(), until);
+  }
+
+  private clearLoginBackoff() {
+    this.loginBackoffUntil = 0;
+    Panel.loginBackoffUntilByPanel.delete(this.loginKey());
+  }
+
+  /** Fetches the CSRF token bound to the current authenticated session. */
+  private async refreshCsrfToken(): Promise<void> {
+    try {
+      const response = await fetch(`${this.url}/csrf-token`, {
+        headers: new Headers({
+          Accept: "application/json",
+          Cookie: this.headers.get("Cookie") ?? "",
+          "User-Agent": this.headers.get("User-Agent") ?? "",
+        }),
+      });
+      if (!response.ok) return;
+      const body = (await response.json().catch(() => null)) as { obj?: unknown } | null;
+      if (typeof body?.obj === "string" && body.obj !== "") {
+        this.csrfToken = body.obj;
+        this.headers.set("X-CSRF-Token", this.csrfToken);
+      }
+    } catch {
+      // Older panels do not implement CSRF protection.
+    }
   }
 
   getUpdatePath(_url: string, email: string) {
@@ -79,7 +166,7 @@ export class Panel {
   }
 
   async resetClientTraffic(_inboundID: number, email: string) {
-    await this.handleLogin();
+    if (!(await this.handleLogin())) return false;
 
     const url = `${this.url}${this.CLIENTS_PATH}/resetTraffic/${encodeURIComponent(email)}`;
 
@@ -94,19 +181,32 @@ export class Panel {
   }
 
   async getInbounds() {
-    await this.handleLogin();
+    // Never call panel endpoints without a valid session. A 403 login response
+    // otherwise leads to an unauthenticated response (often `null`), which
+    // used to crash while reading `obj` below.
+    if (!(await this.handleLogin())) return;
 
     const url = `${this.url}${this.INBOUNDS_PATH}/list`;
     const req = Util.newGetRequest(url, this.headers);
 
     try {
       const res = await fetch(req);
+      if (!res.ok) {
+        this.lastLoginIssue = `could not fetch inbounds (HTTP ${res.status})`;
+        console.error(`Failed to get all inbounds for panel "${this.name}": HTTP ${res.status}`);
+        return;
+      }
 
-      const js = (await res.json()) as GetInboundsResponse;
+      const js = (await res.json().catch(() => null)) as GetInboundsResponse | null;
+      if (js === null || !Array.isArray(js.obj)) {
+        this.lastLoginIssue = "panel returned an invalid inbounds response";
+        console.error(`Failed to get all inbounds for panel "${this.name}": invalid response body`);
+        return;
+      }
 
       const parsed: GetInboundsResponse = {
         ...js,
-        obj: (js.obj ?? []).map((obj) => this.parseInbound(obj)),
+        obj: js.obj.map((obj) => this.parseInbound(obj)),
       };
 
       return parsed;
@@ -149,7 +249,9 @@ export class Panel {
   }
 
   async addClient(inboundID: number, client: NewPanelClient) {
-    await this.handleLogin();
+    if (!(await this.handleLogin())) {
+      throw new PanelLoginError(this.name, this.loginIssue ?? "could not log in");
+    }
 
     const url = `${this.url}${this.CLIENTS_PATH}/add`;
     const body = JSON.stringify({ client, inboundIds: [inboundID] });
@@ -160,7 +262,9 @@ export class Panel {
   }
 
   async updateClient(email: string, client: PanelClientPayload) {
-    await this.handleLogin();
+    if (!(await this.handleLogin())) {
+      throw new PanelLoginError(this.name, this.loginIssue ?? "could not log in");
+    }
 
     const url = `${this.url}${this.CLIENTS_PATH}/update/${encodeURIComponent(email)}`;
     const body = JSON.stringify(client);
@@ -191,8 +295,8 @@ export class Panel {
   }
 
   async getUserConfigs(userID: number) {
-    await this.handleLogin();
-
+    // getInbounds owns authentication; do not retry /login a second time for
+    // a single user request, especially while the panel is rate-limiting us.
     const inbounds = await this.getInbounds();
 
     if (inbounds) {
@@ -212,7 +316,8 @@ export class Panel {
             }
 
             const used = (stat?.down ?? 0) + (stat?.up ?? 0);
-            const remainingGB = client.totalGB - used;
+            const totalBytes = client.totalGB ?? 0;
+            const remainingGB = totalBytes - used;
             const isRenewable =
               (client.expiryTime !== 0 &&
                 client.expiryTime - Date.now() <
@@ -222,17 +327,23 @@ export class Panel {
             const status = stat?.enable ?? false;
             const hasStarted = client.expiryTime > 0;
             const displayEmail = stat?.email ?? client.email ?? "";
-            const email = `${status ? (hasStarted ? (isRenewable ? "🟡" : "🟢") : "🟠") : "🔴"} ${inboundRemark}-${displayEmail}`;
+            const statusMark = status && hasStarted ? "🟢" : status ? "" : "🔴";
+            const email = `${statusMark} ${inboundRemark}-${displayEmail}`.trim();
 
             userConfigs.push({
               email,
-              inboundID: stat?.inboundId ?? 0,
+              // Client stats may not be populated immediately after
+              // provisioning. The inbound itself remains authoritative.
+              inboundID: stat?.inboundId ?? obj.id,
               inboundRemark,
               isOff: !client.enable,
               isRenewable,
               status,
               uuid: client.id,
               hasStarted,
+              remainingBytes: remainingGB,
+              totalBytes,
+              expiryTime: client.expiryTime ?? 0,
             });
           }
         });
@@ -242,8 +353,27 @@ export class Panel {
     }
   }
 
-  async getNewUUID() {
-    await this.handleLogin();
+  /**
+   * Looks up the client exactly as stored in the panel. The client's `id` is
+   * the authoritative UUID; `comment` is deliberately not used as an email.
+   */
+  async getStoredClient(email: string): Promise<{ uuid: string; inboundID: number } | undefined> {
+    const inbounds = await this.getInbounds();
+    for (const inbound of inbounds?.obj ?? []) {
+      const client = inbound.settings.clients.find((item) => item.email === email);
+      if (client) return { uuid: client.id, inboundID: inbound.id };
+    }
+    return;
+  }
+
+  async getNewUUID(): Promise<string | null> {
+    const loggedIn = await this.handleLogin();
+    if (!loggedIn) {
+      console.error(
+        `getNewUUID: skipping request, not logged in for panel "${this.name}"`,
+      );
+      return null;
+    }
 
     const req = Util.newGetRequest(
       `${this.url}${this.UUID_ABS_PATH}`,
@@ -252,20 +382,51 @@ export class Panel {
 
     try {
       const res = await fetch(req);
-      const body = (await res.json()) as
-        | UUIDResponse
-        | { success: boolean; msg: string; obj: string };
+      if (res.status !== 200) {
+        console.error("getNewUUID failed, status code", res.status);
+        return null;
+      }
+      // The panel can answer 200 with a non-JSON/error body on auth problems,
+      // so tolerate any parse failure here instead of crashing.
+      const body = (await res.json().catch(() => null)) as {
+        success?: boolean;
+        msg?: string;
+        obj?: unknown;
+      } | null;
+      if (!body || typeof body !== "object") {
+        console.error("getNewUUID: unexpected (non-JSON) response body");
+        return null;
+      }
+      if (body.success === false) {
+        console.error("getNewUUID failed:", body.msg);
+        return null;
+      }
       // New API: { obj: "<uuid-string>" }; old API: { obj: { uuid } }.
       if (typeof body.obj === "string") return body.obj;
-      return body.obj.uuid;
+      const uuid = (body.obj as { uuid?: string } | null)?.uuid;
+      return typeof uuid === "string" ? uuid : null;
     } catch (error) {
-      console.error(error);
+      console.error("getNewUUID error:", error);
       return null;
     }
   }
 
-  private async handleLogin() {
+  private async handleLogin(): Promise<boolean> {
     const now = Date.now();
+
+    // Respect the per-panel login backoff (set after 3x-ui's 15-min IP ban or
+    // other failures) so we stop hammering /login while blocked and let the
+    // ban cool down before retrying.
+    const sharedBackoffUntil = Panel.loginBackoffUntilByPanel.get(this.loginKey()) ?? 0;
+    this.loginBackoffUntil = Math.max(this.loginBackoffUntil, sharedBackoffUntil);
+    if (now < this.loginBackoffUntil) {
+      const remainingSeconds = Math.round((this.loginBackoffUntil - now) / 1000);
+      this.lastLoginIssue = `login is temporarily blocked; retry in ${remainingSeconds}s`;
+      console.error(
+        `login on backoff for panel "${this.name}" (cooling down for ${remainingSeconds}s)`,
+      );
+      return false;
+    }
 
     const lastLogin = this.lastLogins.get(this.name);
     const isLoggedIn = await this.isStatusSuccess();
@@ -276,44 +437,132 @@ export class Panel {
       now - lastLogin < Util.getUnixTimeOf({ days: 2 })
     ) {
       console.log("You're already logged in");
-      return;
+      return true;
     }
 
     const loginRes = await this.performLogin();
     if (loginRes === "okay") {
       this.lastLogins.set(this.name, now);
       console.log("Login done!");
-    } else {
-      console.error("Failed to login for:", this.name);
+      return true;
     }
+
+    console.error("Failed to login for:", this.name);
+    return false;
   }
 
   private async performLogin(): Promise<Result> {
-    const user: LoginUser = {
-      username: this.username,
-      password: this.password,
-    };
+  const url = `${this.url}${this.LOGIN_PATH}`;
+  this.lastLoginIssue = null;
 
-    const url = `${this.url}${this.LOGIN_PATH}`;
-
-    const req = Util.newPostRequest(url, this.headers, JSON.stringify(user));
-
-    const res = await fetch(req);
-    if (res.status !== 200) {
-      console.error("Failed to get response, status code", res.status);
-      return "error";
-    }
-
-    const setCookieHeader = res.headers.get("Set-Cookie");
-    if (setCookieHeader?.includes("3x-ui=")) {
-      const tokenFromCookie = setCookieHeader.split(";")[0];
-      if (tokenFromCookie) {
-        this.headers.set("Cookie", tokenFromCookie!);
-        return "okay";
+  // Newer 3X-UI releases reject a plain POST /login with HTTP 403. Their web
+  // UI first obtains a CSRF token and pre-login cookie, then sends both with
+  // JSON credentials. Older releases do not expose /csrf-token, so this step
+  // remains best-effort and they fall back to the ordinary JSON login.
+  let csrfCookie: string | null = null;
+  this.csrfToken = null;
+  try {
+    const csrfRes = await fetch(`${this.url}/csrf-token`, {
+      headers: new Headers({
+        Accept: "application/json",
+        "User-Agent": this.headers.get("User-Agent") ?? "",
+      }),
+    });
+    if (csrfRes.ok) {
+      const csrfBody = (await csrfRes.json().catch(() => null)) as {
+        obj?: unknown;
+      } | null;
+      if (typeof csrfBody?.obj === "string" && csrfBody.obj !== "") {
+        this.csrfToken = csrfBody.obj;
       }
+      csrfCookie = this.sessionCookieFrom(csrfRes);
     }
+  } catch {
+    // Older panels and some reverse proxies have no CSRF endpoint.
+  }
 
+  const headers = new Headers(this.headers);
+  headers.set("Content-Type", "application/json");
+  if (csrfCookie !== null) headers.set("Cookie", csrfCookie);
+  if (this.csrfToken !== null) headers.set("X-CSRF-Token", this.csrfToken);
+  const body = JSON.stringify({ username: this.username, password: this.password });
+
+  const req = Util.newPostRequest(url, headers, body);
+
+  let res: Response;
+  try {
+    res = await fetch(req);
+  } catch (error) {
+    this.lastLoginIssue = "panel unreachable (network error)";
+    console.error("Login request failed:", error);
+    this.setLoginBackoff(LOGIN_BACKOFF_MS);
     return "error";
+  }
+
+  // Read once as text so non-JSON bodies (HTML/WAF challenge, ban pages)
+  // are surfaced instead of being swallowed as "undefined".
+  const bodyText = await res.text().catch(() => "");
+  let data: { success?: boolean; msg?: string } | null = null;
+  if (bodyText) {
+    try {
+      data = JSON.parse(bodyText) as { success?: boolean; msg?: string };
+    } catch {
+      data = null;
+    }
+  }
+  const bodySnippet = bodyText.slice(0, 300);
+
+  if (res.status === 403) {
+    // Login rate limiter ban (or a proxy/WAF block). 3x-ui bans for 15 min,
+    // so set a matching backoff so we stop hammering and retry when it lifts.
+    this.setLoginBackoff(LOGIN_BAN_COOLDOWN_MS);
+    this.lastLoginIssue = `login rate-limited/blocked by panel (HTTP 403)${bodySnippet ? `: ${bodySnippet}` : ""}`;
+    console.error(this.lastLoginIssue);
+    return "error";
+  }
+
+  if (res.status !== 200) {
+    this.lastLoginIssue = `panel answered HTTP ${res.status}: ${bodySnippet}`;
+    console.error("Failed to get response, status code", res.status, bodySnippet);
+    this.setLoginBackoff(LOGIN_BACKOFF_MS);
+    return "error";
+  }
+
+  if (data && data.success === false) {
+    this.lastLoginIssue = `panel rejected login: ${data.msg ?? bodySnippet}`;
+    console.error(this.lastLoginIssue);
+    this.setLoginBackoff(LOGIN_BACKOFF_MS);
+    return "error";
+  }
+
+  const session = this.sessionCookieFrom(res);
+  if (session) {
+    this.headers.set("Cookie", session);
+    // A pre-login token is rejected by newer panels for protected POSTs.
+    // Refresh it after receiving the authenticated session cookie.
+    await this.refreshCsrfToken();
+    this.lastLoginIssue = null;
+    this.clearLoginBackoff();
+    return "okay";
+  }
+
+  this.lastLoginIssue = `panel did not return a session cookie${bodySnippet ? `: ${bodySnippet}` : ""}`;
+  this.setLoginBackoff(LOGIN_BACKOFF_MS);
+  console.error(this.lastLoginIssue);
+  return "error";
+}
+
+  /** Pulls all session-cookie pairs out of a login or CSRF response. */
+  private sessionCookieFrom(res: Response): string | null {
+    const headers = res.headers as Headers & { getSetCookie?: () => string[] };
+    const cookies =
+      typeof headers.getSetCookie === "function"
+        ? headers.getSetCookie()
+        : [res.headers.get("Set-Cookie") ?? ""];
+    const pairs = cookies
+      .map((cookie) => cookie.split(";")[0]?.trim() ?? "")
+      .filter((pair) => pair.includes("="));
+    return pairs.length > 0 ? pairs.join("; ") : null;
   }
 
   private async isStatusSuccess() {

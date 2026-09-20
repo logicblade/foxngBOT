@@ -2,6 +2,7 @@ import { bot } from "../..";
 import type { DB } from "../../util/db";
 import { Util } from "../../util/util";
 import { getAllPanels } from "../panel/panel";
+import type { Client, ExpiryCheckUser } from "../types";
 
 async function getExpiringClients(db: DB) {
   const panels = getAllPanels(db);
@@ -17,7 +18,7 @@ async function getExpiringClients(db: DB) {
       const usersTraffic: ExpiryCheckUser[] = [];
 
       for (const obj of inbounds.obj) {
-        obj.settings.clients.forEach((client) => {
+        obj.settings.clients.forEach((client: Client) => {
           const stat = obj.clientStats.find(
             (s) => s.uuid === client.id || s.email === client.email,
           );
@@ -69,7 +70,7 @@ export async function informUserExpiry(db: DB) {
 ‼️ از سرویس اشتراک "${client.remark}-${client.email}"
 (کمتر از 2 روز) باقی مانده است.
 
-میتوانید از قسمت "♻️ تمدید اشتراک" 
+میتوانید از قسمت "🔄 تمدید اشتراک" 
 اشتراک خود را تمدید کنید✅
         `,
     );
