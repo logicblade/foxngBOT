@@ -7,7 +7,6 @@ import {
   reciptReceiveTxt,
   searchingTxt,
   startMessage,
-  statusNotStartedtxt,
   statusOffTxt,
   subFoundGetConfTxt,
   subFoundTxt,
@@ -382,11 +381,7 @@ export const handleRenewCallback = async (ctx: Context, db: DB) => {
 
   await ctx.deleteMessage();
 
-  if (!selected?.hasStarted) {
-    await ctx.reply(withSupport(statusNotStartedtxt), { reply_markup: backToMainMenu() });
-    await ctx.answerCallbackQuery();
-    return;
-  } else if (selected.isOff) {
+  if (selected?.isOff) {
     await ctx.reply(withSupport(statusOffTxt), { reply_markup: backToMainMenu() });
     await ctx.answerCallbackQuery();
     return;
