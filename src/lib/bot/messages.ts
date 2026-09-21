@@ -22,10 +22,10 @@ export function supportMessage() {
 }
 export const searchingTxt = "⏳ در حال جستجو...";
 export const disableSellTxt = `
-کاربر عزیز، متاسفانه در حال حاضر امکان خرید اشتراک جدید وجود ندارد ⛔️
+کاربر عزیز، متاسفانه در حال حاضر امکان خرید اشتراک جدید وجود ندارد 😓⛔️
 `;
 export const disableRenewTxt = `
-کاربر عزیز، متاسفانه در حال حاضر امکان تمدید اشتراک وجود ندارد ⛔️
+کاربر عزیز، متاسفانه در حال حاضر امکان تمدید اشتراک وجود ندارد 😓⛔️
 `;
 export const noSubFoundTxt = `شما در حال حاضر اشتراک فعالی ندارید. 😓`;
 export const subFoundTxt = `
