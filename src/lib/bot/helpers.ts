@@ -1,9 +1,12 @@
 import { type Context, InlineKeyboard, InputFile } from "grammy";
+import { calculateDisplayedTraffic, formatDisplayedTrafficGB } from "../../util/displayTraffic";
+import type { Conversation } from "@grammyjs/conversations";
 import QRCode from "qrcode";
 import {
   PLANS,
   justImageTxt,
   noSubFoundTxt,
+  planFeaturesNote,
   reciptReceiveTxt,
   searchingTxt,
   startMessage,
@@ -69,6 +72,14 @@ export const waitingForCreateImage = new Set<number>();
 export const pendingCreates = new Map<number, { photoFileID: string }>();
 export const pendingCreateConfig = new Set<number>();
 export const pendingCreateConfigType = new Map<number, ConfigPrice>();
+
+export const waitingForBroadcast = new Set<number>();
+export type BroadcastAudience = "all" | "subs";
+export const broadcastAudience = new Map<number, BroadcastAudience>();
+export const pendingBroadcast = new Map<
+  number,
+  { text?: string; photoFileID?: string; caption?: string; audience: BroadcastAudience }
+>();
 
 export const state: State = {
   isRenewActive: true,
@@ -251,9 +262,7 @@ export async function handleStartCommandForUser(ctx: Context, db: DB) {
   }
 
   if (!init) {
-    await ctx.reply("ربات هنوز توسط ادمین راه اندازی نشده است...", {
-      reply_markup: { remove_keyboard: true },
-    });
+    await ctx.reply("ربات هنوز توسط ادمین راه اندازی نشده است...");
     return;
   }
   const name = fullName(ctx);
@@ -262,6 +271,7 @@ export async function handleStartCommandForUser(ctx: Context, db: DB) {
 
 export async function handleImagesIncome(ctx: Context, db: DB) {
   const userID = ctx.from?.id!;
+  const buyerTag = formatBuyerTag(ctx);
 
   if (!ctx.message?.photo) {
     // New DB order flow: user must send a receipt photo for the selected plan.
@@ -316,17 +326,16 @@ export async function handleImagesIncome(ctx: Context, db: DB) {
       pendingRenewals.set(userID, { photoFileID: photo.file_id });
 
       const uuid = pendingConfig.get(userID)?.UUID!;
-      const configs = renewCache[userID]?.filter(
-        (v) =>
-          (v.isRenewable && v.uuid === uuid) ||
-          (v.status === false && v.uuid === uuid),
-      );
+      const configs = renewCache[userID]?.filter((v) => v.uuid === uuid);
       const email = Util.removeEmoji(configs?.at(0)?.email!);
       const type = pendingConfigType.get(userID)!;
 
-      await ctx.api.sendPhoto(ADMIN_ID, photo.file_id, {
-        caption: `درخواست تمدید از طرف کاربر\n${userID}\n\n${email}\n${type}`,
-        reply_markup: {
+      await notifyReceiptReviewers(
+        ctx,
+        db,
+        photo.file_id,
+        `درخواست تمدید از طرف کاربر\n${buyerTag}\n\n${email}\n${type}`,
+        {
           inline_keyboard: [
             [
               { text: "✅ قبول", callback_data: `renewAccept:${userID}` },
@@ -334,7 +343,7 @@ export async function handleImagesIncome(ctx: Context, db: DB) {
             ],
           ],
         },
-      });
+      );
 
       await ctx.reply(reciptReceiveTxt, { reply_markup: userMainMenu() });
       return;
@@ -351,9 +360,12 @@ export async function handleImagesIncome(ctx: Context, db: DB) {
 
       creatingEmail.set(userID, email);
 
-      await ctx.api.sendPhoto(ADMIN_ID, photo.file_id, {
-        caption: `درخواست ساخت اکانت جدید از طرف کاربر\n${userID}\n\n${email}\n${type}`,
-        reply_markup: {
+      await notifyReceiptReviewers(
+        ctx,
+        db,
+        photo.file_id,
+        `درخواست ساخت اکانت جدید از طرف کاربر\n${buyerTag}\n\n${email}\n${type}`,
+        {
           inline_keyboard: [
             [
               { text: "✅ قبول", callback_data: `createAccept:${userID}` },
@@ -361,7 +373,7 @@ export async function handleImagesIncome(ctx: Context, db: DB) {
             ],
           ],
         },
-      });
+      );
 
       await ctx.reply(reciptReceiveTxt, { reply_markup: userMainMenu() });
       return;
@@ -377,6 +389,10 @@ export const handleRenewCallback = async (ctx: Context, db: DB) => {
   if (!configs) return;
 
   const selected = configs[index];
+  if (!selected) {
+    await ctx.answerCallbackQuery();
+    return;
+  }
 
   await ctx.deleteMessage();
 
@@ -420,7 +436,14 @@ export const handleRenewDeclineCallback = async (ctx: Context, db: DB) => {
 
 با آیدی پشتیبانی در ارتباط باشید👇🏼`),
   );
-  await ctx.reply("رد شد ❌");
+  await notifyOtherReviewers(
+    ctx,
+    db,
+    `❌ درخواست تمدید کاربر ${userId} توسط ${formatAdminTag(ctx)} رد شد.`,
+  );
+  await ctx.reply("رد شد ❌", {
+    reply_markup: isOwner(ctx.from?.id) ? adminMenu(true) : subAdminMenu,
+  });
   await ctx.answerCallbackQuery();
 };
 
@@ -444,7 +467,14 @@ export const handleCreateDeclineCallback = async (ctx: Context, db: DB) => {
 
 با آیدی پشتیبانی در ارتباط باشید👇🏼`),
   );
-  await ctx.reply("رد شد ❌");
+  await notifyOtherReviewers(
+    ctx,
+    db,
+    `❌ درخواست خرید کاربر ${userId} توسط ${formatAdminTag(ctx)} رد شد.`,
+  );
+  await ctx.reply("رد شد ❌", {
+    reply_markup: isOwner(ctx.from?.id) ? adminMenu(true) : subAdminMenu,
+  });
   await ctx.answerCallbackQuery();
 };
 
@@ -670,7 +700,6 @@ async function addClientWithFallback(
 
 export async function handleGetConfig(ctx: Context, db: DB) {
   const looking = await ctx.reply(searchingTxt);
-
   const panels = getAllPanels(db);
   let configs: UserConfig[] = [];
 
@@ -740,6 +769,296 @@ export async function handleCreateAccount(ctx: Context, db: DB) {
   });
 }
 
+/** Shared plan selection for both buy and renew flows (inline plan:* buttons). */
+export async function handlePlanSelection(
+  ctx: Context,
+  opts: { planId: string },
+) {
+  const userID = ctx.from?.id!;
+  const plan = getPlan(opts.planId);
+  if (!plan) return;
+
+  if (pendingCreateConfig.has(userID)) {
+    pendingCreateConfig.delete(userID);
+    pendingCreateConfigType.set(userID, plan.id);
+    waitingForCreateImage.add(userID);
+    await ctx.reply(paymentText("buy", plan), {
+      parse_mode: "HTML",
+      reply_markup: cancelMenu,
+    });
+    if (ctx.callbackQuery?.message) {
+      await ctx.deleteMessage().catch(() => {});
+    }
+    return;
+  }
+
+  const uuid = pendingConfig.get(userID)?.UUID;
+  if (uuid) {
+    pendingConfigType.set(userID, plan.id);
+    waitingForRenewImage.add(userID);
+    await ctx.reply(paymentText("renew", plan), {
+      parse_mode: "HTML",
+      reply_markup: cancelMenu,
+    });
+    if (ctx.callbackQuery?.message) {
+      await ctx.deleteMessage().catch(() => {});
+    }
+  }
+}
+
+/** Inline "home" button: drop any pending order state and show main menu. */
+export async function handleMenuHome(ctx: Context) {
+  const userID = ctx.from?.id!;
+  waitingForRenewImage.delete(userID);
+  waitingForCreateImage.delete(userID);
+  pendingConfig.delete(userID);
+  pendingConfigType.delete(userID);
+  pendingCreateConfig.delete(userID);
+  pendingCreateConfigType.delete(userID);
+  waitingForBroadcast.delete(userID);
+  broadcastAudience.delete(userID);
+  pendingBroadcast.delete(userID);
+  try {
+    await ctx.editMessageText(bigGreet(ctx.from?.first_name), { reply_markup: mainMenu });
+  } catch {
+    await ctx.reply(bigGreet(ctx.from?.first_name), { reply_markup: mainMenu });
+  }
+  await ctx.answerCallbackQuery().catch(() => {});
+}
+
+/** Inline "cancel order" button: drop pending state, back to main menu. */
+export async function handleOrderCancel(ctx: Context) {
+  const userID = ctx.from?.id!;
+  waitingForRenewImage.delete(userID);
+  waitingForCreateImage.delete(userID);
+  pendingRenewals.delete(userID);
+  pendingCreates.delete(userID);
+  pendingConfig.delete(userID);
+  pendingConfigType.delete(userID);
+  pendingCreateConfig.delete(userID);
+  pendingCreateConfigType.delete(userID);
+  try {
+    await ctx.editMessageText(bigGreet(ctx.from?.first_name), { reply_markup: mainMenu });
+  } catch {
+    await ctx.reply(bigGreet(ctx.from?.first_name), { reply_markup: mainMenu });
+  }
+  await ctx.answerCallbackQuery().catch(() => {});
+}
+
+/** Inline user menu buttons (menu:*). */
+export async function handleUserMenuCallback(ctx: Context, db: DB) {
+  const data = ctx.callbackQuery?.data ?? "";
+  const action = data.replace("menu:", "");
+  await ctx.answerCallbackQuery().catch(() => {});
+  switch (action) {
+    case "buy":
+      if (!state.isSellActive) {
+        await ctx.reply(disableSellTxt, { reply_markup: backHomeMenu });
+        break;
+      }
+      await handleCreateAccount(ctx);
+      break;
+    case "renew":
+      if (!state.isRenewActive) {
+        await ctx.reply(disableRenewTxt, { reply_markup: backHomeMenu });
+        break;
+      }
+      await handleRenewAccount(ctx, db);
+      break;
+    case "status":
+      await handleCheckAccount(ctx, db);
+      break;
+    case "getconfig":
+      await handleGetConfig(ctx, db);
+      break;
+    case "tutorial":
+      await handleTutorial(ctx);
+      break;
+    case "contact":
+      await handleContact(ctx);
+      break;
+    case "home":
+      await handleMenuHome(ctx);
+      break;
+  }
+}
+
+/** Inline admin menu buttons (admin:*). Needs conversation-capable ctx. */
+export async function handleAdminMenuCallback(
+  ctx: Context & { conversation: { enter(name: string): Promise<void> } },
+  db: DB,
+) {
+  if (!isPrivileged(db, ctx.from?.id)) {
+    await ctx.answerCallbackQuery({ text: "Not allowed" }).catch(() => {});
+    return;
+  }
+  const data = ctx.callbackQuery?.data ?? "";
+  const action = data.replace("admin:", "");
+  await ctx.answerCallbackQuery().catch(() => {});
+  switch (action) {
+    case "panels":
+      await showPanelsListToAdmin(ctx, db);
+      break;
+    case "add":
+      await ctx.conversation.enter("addPanel");
+      break;
+    case "del":
+      await ctx.conversation.enter("removePanel");
+      break;
+    case "state":
+      await showAppStateToAdmin(ctx);
+      break;
+    case "trenew":
+      state.isRenewActive = !state.isRenewActive;
+      await showAppStateToAdmin(ctx);
+      break;
+    case "tsell":
+      state.isSellActive = !state.isSellActive;
+      await showAppStateToAdmin(ctx);
+      break;
+    case "broadcast":
+      broadcastAudience.set(ctx.from?.id!, "all");
+      waitingForBroadcast.add(ctx.from?.id!);
+      await ctx.reply(
+        "متن یا عکس بفرست تا همونو برای همه بفرستم. برای انصراف دکمه «بازگشت به منو اصلی 🔙» رو بزن.",
+        { reply_markup: backHomeMenu },
+      );
+      break;
+    case "broadcast-subs":
+      broadcastAudience.set(ctx.from?.id!, "subs");
+      waitingForBroadcast.add(ctx.from?.id!);
+      await ctx.reply(
+        "متن یا عکس بفرست تا همونو فقط برای کاربرایی که اشتراک دارن بفرستم. برای انصراف دکمه «بازگشت به منو اصلی 🔙» رو بزن.",
+        { reply_markup: backHomeMenu },
+      );
+      break;
+    case "backup":
+      await handleBackup(ctx);
+      break;
+    case "users":
+      await showUserCountToAdmin(ctx, db);
+      break;
+    case "admins":
+      if (!isOwner(ctx.from?.id)) {
+        await ctx.reply("فقط ادمین اصلی میتونه ادمین اضافه کنه ⛔️");
+        break;
+      }
+      await ctx.reply("مدیریت ادمین‌ها 👮\nآیدی عددی تلگرام ادمین جدید رو برای افزودن بفرست، یا از دکمه‌ها استفاده کن.", {
+        reply_markup: adminsMenu,
+      });
+      break;
+  }
+}
+
+/** Owner-only: sub-admin list / add / remove flows (admins:* callbacks + typed ID). */
+
+export const waitingForAdminAdd = new Set<number>();
+export const waitingForAdminRemove = new Set<number>();
+
+export async function handleAdminsMenuCallback(
+  ctx: Context & { conversation: { enter(name: string): Promise<void> } },
+  db: DB,
+) {
+  if (!isOwner(ctx.from?.id)) {
+    await ctx.answerCallbackQuery({ text: "Owner only" }).catch(() => {});
+    return;
+  }
+  const data = ctx.callbackQuery?.data ?? "";
+  const action = data.replace("admins:", "");
+  await ctx.answerCallbackQuery().catch(() => {});
+  const ownerId = ctx.from?.id!;
+  switch (action) {
+    case "noop":
+      await ctx.reply("منتظر رسیدهای جدید باشید ✅", { reply_markup: subAdminMenu });
+      break;
+    case "add":
+      waitingForAdminRemove.delete(ownerId);
+      waitingForAdminAdd.add(ownerId);
+      await ctx.reply("آیدی عددی تلگرام ادمین جدید رو بفرست 👇\n(مثلا: 123456789)", {
+        reply_markup: backHomeMenu,
+      });
+      break;
+    case "del":
+      waitingForAdminAdd.delete(ownerId);
+      if (db.getAdmins().length === 0) {
+        await ctx.reply("هنوز ادمینی اضافه نشده.", { reply_markup: adminsMenu });
+        break;
+      }
+      waitingForAdminRemove.add(ownerId);
+      await ctx.reply("آیدی عددی تلگرام ادمینی که میخوای حذف بشه رو بفرست 👇", {
+        reply_markup: backHomeMenu,
+      });
+      break;
+    case "list": {
+      const admins = db.getAdmins();
+      await ctx.reply(
+        admins.length === 0
+          ? "هنوز ادمینی اضافه نشده."
+          : `👮 ادمین‌ها:\n\n${admins.map((id) => `• <code>${id}</code>`).join("\n")}`,
+        { parse_mode: "HTML", reply_markup: adminsMenu },
+      );
+      break;
+    }
+    case "back":
+      await replyAdminMenu(ctx, "منوی ادمین 👇");
+      break;
+  }
+}
+
+function parseTelegramId(text: string): number | null {
+  const m = text.trim().match(/^(\d{5,20})$/);
+  if (!m) return null;
+  const id = Number(m[1]);
+  return Number.isSafeInteger(id) && id > 0 ? id : null;
+}
+
+/** Handles typed telegram IDs while the owner is adding/removing admins. */
+export async function handleAdminIdMessage(ctx: Context, db: DB): Promise<boolean> {
+  const ownerId = ctx.from?.id;
+  if (ownerId === undefined || !isOwner(ownerId)) return false;
+  if (!waitingForAdminAdd.has(ownerId) && !waitingForAdminRemove.has(ownerId)) {
+    return false;
+  }
+  const text = ctx.message?.text?.trim() ?? "";
+  const tgId = parseTelegramId(text);
+  if (tgId === null) {
+    await ctx.reply("آیدی معتبر نیست ❌\nفقط عدد بفرست، مثلا: 123456789", {
+      reply_markup: backHomeMenu,
+    });
+    return true;
+  }
+  if (tgId === ADMIN_ID) {
+    await ctx.reply("این آیدی، ادمین اصلیه و نیازی به اضافه کردن نداره 🙂", {
+      reply_markup: adminsMenu,
+    });
+    waitingForAdminAdd.delete(ownerId);
+    waitingForAdminRemove.delete(ownerId);
+    return true;
+  }
+  if (waitingForAdminAdd.has(ownerId)) {
+    waitingForAdminAdd.delete(ownerId);
+    const added = db.addAdmin(tgId);
+    await ctx.reply(
+      added ? `ادمین <code>${tgId}</code> اضافه شد ✅` : `این آیدی قبلا ادمین بوده 🙂 (<code>${tgId}</code>)`,
+      { parse_mode: "HTML", reply_markup: adminsMenu },
+    );
+    try {
+      await ctx.api.sendMessage(
+        tgId,
+        "شما به عنوان ادمین به ربات اضافه شدید ✅\nاز این به بعد رسیدهای پرداخت برای شما هم ارسال میشه و میتونید قبول/رد کنید.",
+      );
+    } catch {}
+    return true;
+  }
+  waitingForAdminRemove.delete(ownerId);
+  const removed = db.removeAdmin(tgId);
+  await ctx.reply(
+    removed ? `ادمین <code>${tgId}</code> حذف شد ✅` : `این آیدی تو لیست ادمین‌ها نبود (<code>${tgId}</code>)`,
+    { parse_mode: "HTML", reply_markup: adminsMenu },
+  );
+  return true;
+}
+
 export async function handleCheckAccount(ctx: Context, db: DB) {
   const looking = await ctx.reply(searchingTxt);
 
@@ -806,6 +1125,7 @@ export async function handleStartCommandForAdmin(ctx: Context, db: DB) {
       .catch(() => {});
   }
   const init = db.getPanels().length !== 0;
+  const owner = isOwner(ctx.from?.id);
   if (!init) {
     await ctx.reply(welcomeAdminTxt, { reply_markup: initialOwnerMenu() });
   } else {
@@ -954,6 +1274,11 @@ async function handlePanelReplaceStep(
   }
 }
 
+export async function showUserCountToAdmin(ctx: Context, db: DB) {
+  const ids = db.getUserIds().filter((id) => id !== ADMIN_ID);
+  await replyToAdmin(ctx, `👥 تعداد کاربرانی که ربات را شروع کرده‌اند: ${ids.length}`);
+}
+
 export async function addPanelConv(conversation: Conversation, ctx: Context) {
   await ctx.reply(`
 خب آدرس پنل رو بده بهم:
@@ -1031,12 +1356,26 @@ export async function removePanelConv(
 export async function getConfigsPanel(uuid: string, db: DB) {
   const panels = getAllPanels(db);
 
+  // uuid here may be a client UUID (vless/vmess id) or the raw email key.
+  // Prefer the client-centric lookup, fall back to scanning inbounds.
   for (const panel of panels) {
+    const clients = await panel.getClients();
+    if (clients?.success && Array.isArray(clients.obj)) {
+      const found = clients.obj.find(
+        (c) => c.uuid === uuid || c.email === uuid,
+      );
+      if (found) return panel;
+    }
     const inbounds = await panel.getInbounds();
     if (inbounds) {
       for (const bound of inbounds.obj) {
         for (const client of bound.clientStats) {
           if (client.uuid === uuid) {
+            return panel;
+          }
+        }
+        for (const client of bound.settings.clients) {
+          if (client.id === uuid || client.email === uuid) {
             return panel;
           }
         }
@@ -1149,6 +1488,16 @@ export async function genConfig(
   const request = stream.tcpSettings?.header?.request;
   const hostHeader = stream.wsSettings?.host ?? request?.headers?.Host?.at(0) ?? undefined;
   const path = stream.wsSettings?.path ?? request?.path?.at(0) ?? undefined;
+
+  // TCP-only settings are absent on reality/grpc/xhttp inbounds — guard them.
+  const tcpHeader = streamSettings.tcpSettings?.header;
+  const tcpRequest = tcpHeader?.request;
+
+  // WebSocket transport keeps host/path in wsSettings (host field or
+  // headers.Host on older panels). Client apps need both to connect.
+  const ws = streamSettings.wsSettings;
+  const wsHost = ws?.host || ws?.headers?.Host || ws?.headers?.host || undefined;
+  const wsPath = ws?.path || undefined;
 
   let configLink = "";
   if (inbound.obj.protocol === "vless") {

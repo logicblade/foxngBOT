@@ -252,7 +252,7 @@ export interface StreamSettings {
     acceptProxyProtocol: boolean;
     header: {
       type: string;
-      request: {
+      request?: {
         version: string;
         method: string;
         path: string[];
@@ -260,7 +260,7 @@ export interface StreamSettings {
           Host: string[];
         };
       };
-      response: {
+      response?: {
         version: string;
         status: string;
         reason: string;
@@ -268,7 +268,34 @@ export interface StreamSettings {
       };
     };
   };
-  kcpSettings: KcpSettings;
+  wsSettings?: {
+    acceptProxyProtocol?: boolean;
+    path?: string;
+    /** Newer xray panels put the Host here directly. */
+    host?: string;
+    /** Older ones keep it in headers.Host. */
+    headers?: {
+      Host?: string;
+      [key: string]: string | undefined;
+    };
+  };
+  realitySettings?: {
+    show?: boolean;
+    dest?: string;
+    xver?: number;
+    serverNames?: string[];
+    privateKey?: string;
+    publicKey?: string;
+    shortIds?: string[];
+    fingerprint?: string;
+    spiderX?: string;
+  };
+  xhttpSettings?: {
+    path?: string;
+    host?: string;
+    mode?: string;
+  };
+  kcpSettings?: KcpSettings;
 }
 
 export interface ExternalProxy {

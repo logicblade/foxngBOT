@@ -5,17 +5,26 @@ import { getAllPanels } from "../panel/panel";
 import type { Client, ExpiryCheckUser } from "../types";
 import { userMainMenu } from "./keyboards";
 
-async function getExpiringClients(db: DB) {
+async function getLowQuotaClients(db: DB) {
   const panels = getAllPanels(db);
 
-  const clientsDate: ExpiryCheckUser[] = [];
   const clientsTraffic: ExpiryCheckUser[] = [];
 
   for (const panel of panels) {
     const inbounds = await panel.getInbounds();
+    const clientsRes = await panel.getClients();
+    const trafficByEmail = new Map(
+      (clientsRes?.obj ?? []).map((c) => [
+        c.email,
+        {
+          up: c.traffic ? c.traffic.up : (c.up ?? 0),
+          down: c.traffic ? c.traffic.down : (c.down ?? 0),
+          enable: c.traffic ? c.traffic.enable : c.enable,
+        },
+      ]),
+    );
 
     if (inbounds) {
-      const usersDate: ExpiryCheckUser[] = [];
       const usersTraffic: ExpiryCheckUser[] = [];
 
       for (const obj of inbounds.obj) {
@@ -23,10 +32,15 @@ async function getExpiringClients(db: DB) {
           const stat = obj.clientStats.find(
             (s) => s.uuid === client.id || s.email === client.email,
           );
-          const used = (stat?.down ?? 0) + (stat?.up ?? 0);
+          const counters = trafficByEmail.get(client.email) ?? {
+            up: stat?.up ?? 0,
+            down: stat?.down ?? 0,
+            enable: stat?.enable ?? client.enable,
+          };
+          const used = counters.down + counters.up;
           const remainingGB = client.totalGB - used;
-          const now = Date.now();
 
+          // Subscriptions are time-unlimited: only quota matters.
           if (
             client.expiryTime - now <= Util.getUnixTimeOf({ days: 2 }) &&
             client.expiryTime !== 0 &&
@@ -52,12 +66,11 @@ async function getExpiringClients(db: DB) {
         });
       }
 
-      if (usersDate.length > 0) clientsDate.push(...usersDate);
       if (usersTraffic.length > 0) clientsTraffic.push(...usersTraffic);
     }
   }
 
-  return { clientsDate, clientsTraffic };
+  return { clientsTraffic };
 }
 
 export async function informUserExpiry(db: DB) {

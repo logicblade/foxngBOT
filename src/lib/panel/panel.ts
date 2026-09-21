@@ -131,7 +131,7 @@ export class Panel {
     return `${this.url}${this.CLIENTS_PATH}/update/${encodeURIComponent(email)}`;
   }
 
-  getAddClientPath(_url: string) {
+  getAddClientPath() {
     return `${this.url}${this.CLIENTS_PATH}/add`;
   }
 
@@ -155,11 +155,22 @@ export class Panel {
     const req = Util.newGetRequest(url, this.headers);
 
     const res = await fetch(req);
-    const js = (await res.json()) as GetInboundResponse;
+    if (!res.ok) {
+      const snippet = (await res.text().catch(() => "")).slice(0, 500);
+      throw new Error(
+        `getInboundByID ${inboundID} failed: ${res.status}. Body: ${snippet}`,
+      );
+    }
+    const js = (await res.json().catch(() => null)) as GetInboundResponse | null;
+    if (!js || !js.obj) {
+      throw new Error(
+        `getInboundByID ${inboundID} returned no inbound (success=${js?.success}, msg=${js?.msg})`,
+      );
+    }
 
     const parsed: GetInboundResponse = {
       ...js,
-      obj: js.obj && this.parseInbound(js.obj),
+      obj: this.parseInbound(js.obj),
     };
 
     return parsed;
@@ -211,7 +222,7 @@ export class Panel {
 
       return parsed;
     } catch (error) {
-      console.error("Failed to get all inbounds:", error);
+      console.error(`Failed to get all inbounds for ${this.name}:`, error);
       return;
     }
   }
@@ -240,7 +251,18 @@ export class Panel {
 
     try {
       const res = await fetch(req);
+      if (!res.ok) {
+        console.error(
+          `getClientByEmail ${email} failed: ${res.status}. Body: ${(await res.text().catch(() => "")).slice(0, 300)}`,
+        );
+        return;
+      }
       const js = (await res.json()) as GetClientResponse;
+      if (!js?.obj) {
+        console.error(
+          `getClientByEmail ${email}: no client in response (success=${js?.success}, msg=${js?.msg})`,
+        );
+      }
       return js;
     } catch (error) {
       console.error("Failed to get client:", error);
@@ -258,7 +280,83 @@ export class Panel {
     const req = Util.newPostRequest(url, this.headers, body);
 
     const res = await fetch(req);
-    return res;
+    const text = await res.text().catch(() => "");
+
+    if (res.status !== 200 || !text.includes("true")) {
+      return { ok: false, status: res.status, body: text.slice(0, 500) };
+    }
+
+    // 1st verification attempt: the single-client endpoint. Some panel
+    // versions return obj as a single object, others as a one-element array.
+    try {
+      const stored = await this.getClientByEmail(client.email);
+      const row = Array.isArray(stored?.obj) ? stored.obj[0] : stored?.obj;
+      const uuid = Panel.extractClientUuid(row);
+      if (uuid) {
+        if (client.uuid && uuid !== client.uuid) {
+          console.warn(
+            `addClient: panel stored a different uuid than requested for ${client.email} (requested=${client.uuid}, stored=${uuid})`,
+          );
+        }
+        return { ok: true, uuid };
+      }
+    } catch (error) {
+      console.error("addClient: verification read threw:", error);
+    }
+
+    // 2nd attempt: scan the full clients list for this email.
+    try {
+      const list = await this.getClients();
+      const rows = Array.isArray(list?.obj) ? list.obj : [];
+      const row = rows.find((r) => r?.email === client.email);
+      const uuid = Panel.extractClientUuid(row);
+      if (uuid) {
+        if (client.uuid && uuid !== client.uuid) {
+          console.warn(
+            `addClient: panel stored a different uuid than requested for ${client.email} (requested=${client.uuid}, stored=${uuid})`,
+          );
+        }
+        return { ok: true, uuid };
+      }
+    } catch (error) {
+      console.error("addClient: list verification threw:", error);
+    }
+
+    // The panel's stored credential could not be confirmed — hard fail.
+    // A config link built from anything else would not work.
+    console.error(
+      `addClient: could not verify stored uuid for ${client.email} — failing without fallback`,
+    );
+    return { ok: false, status: res.status, body: text.slice(0, 500) };
+  }
+
+  /** Finds a client row by its vless/vmess credential (uuid), scanning the list. */
+  async findClientByUUID(uuid: string): Promise<PanelClient | undefined> {
+    try {
+      const list = await this.getClients();
+      const rows = Array.isArray(list?.obj) ? list.obj : [];
+      return rows.find(
+        (r) =>
+          Panel.extractClientUuid(r) === uuid ||
+          r?.email === uuid,
+      );
+    } catch (error) {
+      console.error("findClientByUUID failed:", error);
+      return undefined;
+    }
+  }
+
+  /** Pulls the vless/vmess credential off a stored client row. */
+  private static extractClientUuid(
+    row: PanelClient | undefined | null,
+  ): string | undefined {
+    if (!row) return undefined;
+    if (typeof row.uuid === "string" && row.uuid) return row.uuid;
+    // Some panel versions keep the vless credential in a string `id` field
+    // (numeric row ids don't count — real uuids contain dashes).
+    const id = (row as unknown as { id?: unknown }).id;
+    if (typeof id === "string" && id.includes("-")) return id;
+    return undefined;
   }
 
   async updateClient(email: string, client: PanelClientPayload) {
@@ -272,10 +370,6 @@ export class Panel {
 
     const res = await fetch(req);
     return res;
-  }
-
-  async addClientToInbound(inboundID: number, email: string, UUID: string) {
-    await this.handleLogin();
   }
 
   async getConfigJSON() {
@@ -298,13 +392,28 @@ export class Panel {
     // getInbounds owns authentication; do not retry /login a second time for
     // a single user request, especially while the panel is rate-limiting us.
     const inbounds = await this.getInbounds();
+    const clientsRes = await this.getClients();
+    const clientsByEmail = new Map<string, PanelClient>();
+    for (const c of clientsRes?.obj ?? []) {
+      if (c?.email) clientsByEmail.set(c.email, c);
+    }
 
     if (inbounds) {
       let userConfigs: UserConfig[] = [];
 
       for (const obj of inbounds.obj) {
         obj.settings.clients.forEach((client) => {
-          if (userID === Number(client.comment)) {
+          // Owner identity: comment holds the telegram ID; fall back to
+          // tgId and to the email prefix convention (first3ofTgID + 3 digits).
+          const owner =
+            client.comment ?? (client.tgId !== undefined ? String(client.tgId) : "");
+          const emailPrefix = client.email.slice(0, 3);
+          const matches =
+            userID === Number(client.comment) ||
+            (client.tgId !== undefined && Number(client.tgId) === userID) ||
+            String(userID).startsWith(emailPrefix) ||
+            owner === String(userID);
+          if (matches) {
             const stat = obj.clientStats.find(
               (s) => s.uuid === client.id || s.email === client.email,
             );
@@ -319,10 +428,7 @@ export class Panel {
             const totalBytes = client.totalGB ?? 0;
             const remainingGB = totalBytes - used;
             const isRenewable =
-              (client.expiryTime !== 0 &&
-                client.expiryTime - Date.now() <
-                  Util.getUnixTimeOf({ days: 3 })) ||
-              (client.totalGB !== 0 && remainingGB <= Util.gigsToBytes(3));
+              client.totalGB !== 0 && remainingGB <= Util.gigsToBytes(3);
             const inboundRemark = obj.remark;
             const status = stat?.enable ?? false;
             const hasStarted = client.expiryTime > 0;
@@ -336,10 +442,10 @@ export class Panel {
               // provisioning. The inbound itself remains authoritative.
               inboundID: stat?.inboundId ?? obj.id,
               inboundRemark,
-              isOff: !client.enable,
+              isOff: !(clientRow?.enable ?? client.enable),
               isRenewable,
               status,
-              uuid: client.id,
+              uuid: clientRow?.uuid ?? client.id,
               hasStarted,
               remainingBytes: remainingGB,
               totalBytes,
@@ -570,8 +676,12 @@ export class Panel {
 
     const req = Util.newGetRequest(loginURL, this.headers);
 
-    const res = await fetch(req);
-
-    return res.status === 200;
+    try {
+      const res = await fetch(req);
+      return res.status === 200;
+    } catch (error) {
+      console.error(`Status check failed for ${this.name}:`, error);
+      return false;
+    }
   }
 }
