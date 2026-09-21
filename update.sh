@@ -24,6 +24,19 @@ if [ "$EUID" -ne 0 ]; then
   exit 1
 fi
 
+if [ ! -d "$INSTALL_DIR" ] && [ -d "/opt/FoxNGBot" ]; then
+  APP_NAME="FoxNGBot"
+  INSTALL_DIR="/opt/$APP_NAME"
+  SERVICE_NAME="$APP_NAME.service"
+fi
+
+if [ ! -d "$INSTALL_DIR" ]; then
+  echo "Installation directory not found: /opt/FoxNG or /opt/FoxNGBot"
+  echo "Run the installer first:"
+  echo "  bash <(curl -fsSL https://raw.githubusercontent.com/logicblade/sh-bot/refs/heads/main/install.sh)"
+  exit 1
+fi
+
 cd "$INSTALL_DIR"
 
 echo "Pulling latest changes from repository..."
