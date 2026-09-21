@@ -3,6 +3,7 @@ import type { DB } from "../../util/db";
 import { Util } from "../../util/util";
 import { getAllPanels } from "../panel/panel";
 import type { Client, ExpiryCheckUser } from "../types";
+import { userMainMenu } from "./keyboards";
 
 async function getExpiringClients(db: DB) {
   const panels = getAllPanels(db);
@@ -37,7 +38,7 @@ async function getExpiringClients(db: DB) {
               remark: obj.remark,
             });
           } else if (
-            remainingGB <= Util.gigsToBytes(2) &&
+            remainingGB <= Util.gigsToBytes(4) &&
             client.totalGB !== 0 &&
             client.enable
           ) {
@@ -45,6 +46,7 @@ async function getExpiringClients(db: DB) {
               email: client.email,
               tgID: client.tgId || client.comment,
               remark: obj.remark,
+              remainingBytes: Math.max(0, remainingGB),
             });
           }
         });
@@ -83,11 +85,15 @@ export async function informUserExpiry(db: DB) {
 ⚠️ کاربر گرامی ⚠️
 
 ‼️ از سرویس اشتراک "${client.remark}-${client.email}"
-(کمتر از 2 گیگابایت) باقی مانده است.
+      (${(Util.bytesToGB(client.remainingBytes ?? 0)).toFixed(1)} گیگابایت) حجم باقی مانده است.
 
-میتوانید از قسمت "♻️ تمدید اشتراک"
-اشتراک خود را تمدید کنید✅
+      قبل از اتمام حجم می‌توانید با دکمه «🔄 تمدید اشتراک» سرویس خود را شارژ کنید ✅
         `,
+      {
+        reply_markup: userMainMenu()
+          .row()
+          .text("🔙 بازگشت به منوی اصلی", "user:main"),
+      },
     );
   });
 }

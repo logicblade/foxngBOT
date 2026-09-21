@@ -162,6 +162,7 @@ export interface ExpiryCheckUser {
   email: string;
   tgID: string | number;
   remark: string;
+  remainingBytes?: number;
 }
 
 export interface GetInboundsResponse {

@@ -7,7 +7,6 @@ import {
   reciptReceiveTxt,
   searchingTxt,
   startMessage,
-  statusOffTxt,
   subFoundGetConfTxt,
   subFoundTxt,
   welcomeAdminTxt,
@@ -381,16 +380,10 @@ export const handleRenewCallback = async (ctx: Context, db: DB) => {
 
   await ctx.deleteMessage();
 
-  if (selected?.isOff) {
-    await ctx.reply(withSupport(statusOffTxt), { reply_markup: backToMainMenu() });
-    await ctx.answerCallbackQuery();
-    return;
-  } else {
-    pendingConfig.set(userID, {
-      UUID: selected?.uuid!,
-      inboundID: selected?.inboundID!,
-    });
-  }
+  pendingConfig.set(userID, {
+    UUID: selected?.uuid!,
+    inboundID: selected?.inboundID!,
+  });
 
   pendingOrderFlow.set(userID, {
     type: "renew",
