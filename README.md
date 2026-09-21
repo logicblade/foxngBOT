@@ -1,4 +1,4 @@
-# sh-bot
+# FOXNG-BOT
 
 A Telegram bot that connects to you 3X-UI v2ray VPN panel and let's you automate you misery.
 
