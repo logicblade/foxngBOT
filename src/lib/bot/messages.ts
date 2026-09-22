@@ -56,7 +56,7 @@ export function discountedPlan(plan: Plan, discountPercent: number): Plan {
   return {
     ...plan,
     price: discountedPrice,
-    label: `🔥 ${discountPercent}٪ | ${plan.volumeGB} گیگ | اصلی: ${Util.formatPrice(plan.price)} | نهایی: ${Util.formatPrice(discountedPrice)} تومان`,
+    label: `🔥 ${discountPercent}٪ | ${plan.volumeGB} گیگ | 💰 ${Util.formatPrice(discountedPrice)} تومان`,
   };
 }
 
