@@ -1,4 +1,4 @@
-# sh-bot
+# FOXNG-BOT
 
 A Telegram bot that connects to you 3X-UI v2ray VPN panel and let's you automate you misery.
 
@@ -23,8 +23,8 @@ Be sure to check the generated .env file.
 BOT_TOKEN=Your-Telegram-Bot-Token-From-BotFather
 OWNER_ID=Your-Telegram-User-ID        # full access: stats, broadcast, backup, add admin
 ADMIN_ID=Your-Telegram-User-ID        # legacy alias, also treated as owner
-SUPPORT_ID=@foxngsup                  # support contact shown to users
-CARD_NUMBER=5029081059314381          # payment card shown in the receipt step
+SUPPORT_ID=@*****                 # support contact shown to users
+CARD_NUMBER=5029-****-****-****          # payment card shown in the receipt step
 CARD_OWNER=Card Holder Name
 ```
 
