@@ -204,24 +204,40 @@ export async function showDiscountManagement(ctx: Context, db: DB) {
   await ctx.reply(text, { reply_markup: markup });
 }
 
-export function orderCaption(o: Order): string {
+export function orderCaption(o: Order, configEmail?: string): string {
   const typeTxt = o.type === "buy" ? "خرید جدید" : "تمدید";
   const date = Util.formatDateTime(o.created_at);
+  const requestedEmail = configEmail ?? o.config_email;
   return `🧾 سفارش #${o.id} (${typeTxt}) — ⏳ در انتظار بررسی
 👤 کاربر: ${o.tg_name} (${o.tg_id})
 ${o.tg_username ? `🔗 یوزرنیم: @${o.tg_username}` : ""}
+${requestedEmail ? `📧 ایمیل کانفیگ: ${requestedEmail}` : ""}
 📦 پلن: ${o.volume_gb} گیگ | ⏳ ${o.duration_days} روزه | 💰 ${Util.formatPrice(o.price)} تومان
 🧾 رسید: ${o.receipt_file_id ? "دریافت شد ✅" : "—"}
 🕓 ${date}
 وضعیت: ${o.status}`;
 }
 
+async function getRenewalConfigEmail(order: Order): Promise<string | undefined> {
+  if (order.type !== "renew" || !order.target_uuid) return;
+
+  for (const panel of getAllPanels(db)) {
+    const inbounds = await panel.getInbounds();
+    for (const inbound of inbounds?.obj ?? []) {
+      if (order.target_inbound_id !== null && inbound.id !== order.target_inbound_id) continue;
+      const client = inbound.settings.clients.find((item) => item.id === order.target_uuid);
+      if (client) return client.email;
+    }
+  }
+}
+
 async function notifyReviewers(ctx: Context, order: Order, receiptFileId: string) {
   const targets = new Set<number>([OWNER_ID, ADMIN_ID, ...db.getAdmins().map((a) => a.tg_id)].filter((v) => v > 0));
+  const configEmail = await getRenewalConfigEmail(order);
   for (const adminId of targets) {
     try {
       await ctx.api.sendPhoto(adminId, receiptFileId, {
-        caption: orderCaption(order),
+        caption: orderCaption(order, configEmail),
         reply_markup: orderDecisionMenu(order.id),
       });
     } catch (e) {
@@ -481,6 +497,7 @@ export async function approveOrder(
   try {
     if (fresh.type === "buy") await fulfillBuyOrder(ctx, db, fresh);
     else await fulfillRenewOrder(ctx, db, fresh);
+    db.clearOrderConfigEmail(fresh.id);
 
     try {
       await ctx.api.sendMessage(
@@ -560,7 +577,13 @@ async function fulfillBuyOrder(ctx: Context, db: DB, order: Order): Promise<void
   const panels = getAllPanels(db);
   if (panels.length === 0) throw new Error("no panels");
   const panel = panels.find((p) => p.name === "users") ?? panels[0]!;
-  const created = await addClientWithFallback(panel, userId, order.volume_gb, order.duration_days);
+  const created = await addClientWithFallback(
+    panel,
+    userId,
+    order.volume_gb,
+    order.duration_days,
+    order.config_email ?? undefined,
+  );
   const { qrFile, configLink } = await genConfig(
     panel,
     created.email,
@@ -626,6 +649,7 @@ async function addClientWithFallback(
   userId: number,
   volumeGB: number,
   days: number,
+  requestedEmail?: string,
 ): Promise<{ email: string; uuid: string; inboundID: number }> {
   const maxTries = 5;
   let attempt = 0;
@@ -635,7 +659,9 @@ async function addClientWithFallback(
     // Keep the panel email short and non-identifying: first 3 Telegram-ID
     // digits plus 3 random digits, e.g. 260482.
     const prefix = String(Math.abs(userId)).slice(0, 3).padEnd(3, "0");
-    const email = `${prefix}${Math.floor(Math.random() * 1000).toString().padStart(3, "0")}`;
+    const email = attempt === 0 && requestedEmail
+      ? requestedEmail
+      : `${prefix}${Math.floor(Math.random() * 1000).toString().padStart(3, "0")}`;
     try {
       const res = await panel.addClient(Number(WHICH_INBOUND), {
         email,

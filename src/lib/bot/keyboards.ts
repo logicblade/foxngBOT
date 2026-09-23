@@ -58,11 +58,20 @@ export function ownerMainMenu(pendingCount: number): InlineKeyboard {
     .text("💾 بکاپ دیتابیس", "owner:backup")
     .text("👥 مدیریت ادمین‌ها", "owner:admins")
     .row()
+    .text("🧹 پاکسازی سفارش‌ها", "owner:orders:cleanup")
+    .row()
     .text("🏷 تخفیفات", "owner:discounts")
     .row()
     .text("🖥 پنل‌ها", "owner:panels")
     .row()
     .text("⚙️ وضعیت خرید و تمدید", "owner:appstate");
+}
+
+export function orderCleanupConfirmMenu(): InlineKeyboard {
+  return new InlineKeyboard()
+    .text("✅ بله، پاکسازی کن", "owner:orders:cleanup:confirm")
+    .row()
+    .text("❌ لغو", "admin:main");
 }
 
 export function discountManagementMenu(): InlineKeyboard {

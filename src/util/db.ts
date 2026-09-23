@@ -62,6 +62,7 @@ export class DB {
     volume_gb INTEGER NOT NULL DEFAULT 0,
     duration_days INTEGER NOT NULL DEFAULT 0,
     price INTEGER NOT NULL DEFAULT 0,
+    config_email TEXT,
     receipt_file_id TEXT,
     receipt_kind TEXT,
     status TEXT NOT NULL DEFAULT 'PENDING',
@@ -94,6 +95,7 @@ export class DB {
     if (!names.has("volume_gb")) add(`ALTER TABLE orders ADD COLUMN volume_gb INTEGER NOT NULL DEFAULT 0`);
     if (!names.has("duration_days")) add(`ALTER TABLE orders ADD COLUMN duration_days INTEGER NOT NULL DEFAULT 0`);
     if (!names.has("price")) add(`ALTER TABLE orders ADD COLUMN price INTEGER NOT NULL DEFAULT 0`);
+    if (!names.has("config_email")) add(`ALTER TABLE orders ADD COLUMN config_email TEXT`);
     if (!names.has("receipt_file_id")) add(`ALTER TABLE orders ADD COLUMN receipt_file_id TEXT`);
     if (!names.has("receipt_kind")) add(`ALTER TABLE orders ADD COLUMN receipt_kind TEXT`);
     if (!names.has("status")) add(`ALTER TABLE orders ADD COLUMN status TEXT NOT NULL DEFAULT 'PENDING'`);
@@ -347,12 +349,13 @@ export class DB {
     volumeGB: number;
     durationDays: number;
     price: number;
+    configEmail?: string | null;
     targetUUID?: string | null;
     targetInboundId?: number | null;
   }): number {
     const res = this.db.run(
-      `INSERT INTO orders (tg_id, tg_name, tg_username, type, plan_id, volume_gb, duration_days, price, status, target_uuid, target_inbound_id, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'PENDING', ?, ?, ?)`,
+      `INSERT INTO orders (tg_id, tg_name, tg_username, type, plan_id, volume_gb, duration_days, price, config_email, status, target_uuid, target_inbound_id, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDING', ?, ?, ?)`,
       [
         input.tgId,
         input.tgName,
@@ -362,6 +365,7 @@ export class DB {
         input.volumeGB,
         input.durationDays,
         input.price,
+        input.configEmail ?? null,
         input.targetUUID ?? null,
         input.targetInboundId ?? null,
         Date.now(),
@@ -376,6 +380,18 @@ export class DB {
       kind,
       orderId,
     ]);
+  }
+
+  clearOrderConfigEmail(orderId: number) {
+    this.db.run("UPDATE orders SET config_email = NULL WHERE id = ?", [orderId]);
+  }
+
+  clearOrders(): number {
+    const count = this.db
+      .query("SELECT COUNT(*) AS count FROM orders")
+      .get() as { count: number };
+    this.db.run("DELETE FROM orders");
+    return count.count;
   }
 
   getOrderById(orderId: number): Order | null {

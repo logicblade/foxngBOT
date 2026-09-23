@@ -25,6 +25,7 @@ export interface Order {
   volume_gb: number;
   duration_days: number;
   price: number;
+  config_email: string | null;
   receipt_file_id: string | null;
   receipt_kind: string | null;
   status: OrderStatus;
@@ -163,6 +164,7 @@ export interface ExpiryCheckUser {
   tgID: string | number;
   remark: string;
   remainingBytes?: number;
+  remainingDays?: number;
 }
 
 export interface GetInboundsResponse {

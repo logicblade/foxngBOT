@@ -28,7 +28,7 @@ async function getExpiringClients(db: DB) {
           const now = Date.now();
 
           if (
-            client.expiryTime - now <= Util.getUnixTimeOf({ days: 2 }) &&
+            client.expiryTime - now <= Util.getUnixTimeOf({ days: 4 }) &&
             client.expiryTime !== 0 &&
             client.enable
           ) {
@@ -36,8 +36,14 @@ async function getExpiringClients(db: DB) {
               email: client.email,
               tgID: client.tgId || client.comment,
               remark: obj.remark,
+              remainingDays: Math.max(
+                0,
+                Math.ceil((client.expiryTime - now) / Util.getUnixTimeOf({ days: 1 })),
+              ),
             });
-          } else if (
+          }
+
+          if (
             remainingGB <= Util.gigsToBytes(4) &&
             client.totalGB !== 0 &&
             client.enable
@@ -70,11 +76,16 @@ export async function informUserExpiry(db: DB) {
 ⚠️ کاربر گرامی ⚠️
 
 ‼️ از سرویس اشتراک "${client.remark}-${client.email}"
-(کمتر از 2 روز) باقی مانده است.
+(${client.remainingDays ?? 0} روز) باقی مانده است.
 
 میتوانید از قسمت "🔄 تمدید اشتراک" 
 اشتراک خود را تمدید کنید✅
         `,
+      {
+        reply_markup: userMainMenu()
+          .row()
+          .text("🔙 بازگشت به منوی اصلی", "user:main"),
+      },
     );
   });
 

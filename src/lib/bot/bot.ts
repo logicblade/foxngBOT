@@ -68,6 +68,7 @@ import {
   backToAdminMainMenu,
   backToMainMenu,
   cancelActionMenu,
+  orderCleanupConfirmMenu,
   orderDecisionMenu,
   pendingOrdersMenu,
   planMenu,
@@ -235,6 +236,8 @@ export class TelBot {
       const userId = ctx.from?.id!;
       db.cancelPendingOrdersForUser(userId);
       const pricedPlan = discountedPlan(plan, db.getDiscountPercent());
+      const emailPrefix = String(Math.abs(userId)).slice(0, 3).padEnd(3, "0");
+      const configEmail = `${emailPrefix}${Math.floor(Math.random() * 1000).toString().padStart(3, "0")}`;
       const orderId = db.createOrder({
         tgId: userId,
         tgName: fullName(ctx),
@@ -244,6 +247,7 @@ export class TelBot {
         volumeGB: plan.volumeGB,
         durationDays: plan.days,
         price: pricedPlan.price,
+        configEmail,
       });
       pendingOrderFlow.set(userId, { type: "buy", orderId });
       const text = `${paymentText("buy", pricedPlan, plan.price)}\n\n🧾 سفارش #${orderId} ثبت شد (در انتظار رسید).`;
@@ -373,6 +377,30 @@ export class TelBot {
 
     this.bot.callbackQuery("owner:backup", async (ctx) => {
       await handleBackup(ctx, db);
+      await ctx.answerCallbackQuery().catch(() => {});
+    });
+
+    this.bot.callbackQuery("owner:orders:cleanup", async (ctx) => {
+      if (!isOwner(ctx.from?.id!)) {
+        await ctx.answerCallbackQuery({ text: "⛔ فقط مالک" });
+        return;
+      }
+      await ctx.reply(
+        "⚠️ همه اطلاعات جدول سفارش‌ها حذف می‌شود و قابل بازگشت نیست. ادامه می‌دهید؟",
+        { reply_markup: orderCleanupConfirmMenu() },
+      );
+      await ctx.answerCallbackQuery().catch(() => {});
+    });
+
+    this.bot.callbackQuery("owner:orders:cleanup:confirm", async (ctx) => {
+      if (!isOwner(ctx.from?.id!)) {
+        await ctx.answerCallbackQuery({ text: "⛔ فقط مالک" });
+        return;
+      }
+      const deletedCount = db.clearOrders();
+      await ctx.reply(`✅ پاکسازی انجام شد. ${deletedCount} سفارش حذف شد.`, {
+        reply_markup: backToAdminMainMenu(),
+      });
       await ctx.answerCallbackQuery().catch(() => {});
     });
 
