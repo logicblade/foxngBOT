@@ -58,6 +58,8 @@ export function ownerMainMenu(pendingCount: number): InlineKeyboard {
     .text("💾 بکاپ دیتابیس", "owner:backup")
     .text("👥 مدیریت ادمین‌ها", "owner:admins")
     .row()
+    .text("💽 فضای دیسک سرور", "owner:disk-space")
+    .row()
     .text("🧹 پاکسازی سفارش‌ها", "owner:orders:cleanup")
     .row()
     .text("🏷 تخفیفات", "owner:discounts")

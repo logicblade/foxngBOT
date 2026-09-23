@@ -14,6 +14,7 @@ import {
   handleCheckAccount,
   handleCreateAccount,
   handleCreateDeclineCallback,
+  handleDiskSpace,
   handleGetConfig,
   handleImagesIncome,
   handleOwnerComposedMessage,
@@ -377,6 +378,11 @@ export class TelBot {
 
     this.bot.callbackQuery("owner:backup", async (ctx) => {
       await handleBackup(ctx, db);
+      await ctx.answerCallbackQuery().catch(() => {});
+    });
+
+    this.bot.callbackQuery("owner:disk-space", async (ctx) => {
+      await handleDiskSpace(ctx);
       await ctx.answerCallbackQuery().catch(() => {});
     });
 

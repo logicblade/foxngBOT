@@ -1,4 +1,5 @@
 import { type Context, InlineKeyboard, InputFile } from "grammy";
+import { statfs } from "node:fs/promises";
 import QRCode from "qrcode";
 import {
   PLANS,
@@ -1424,6 +1425,52 @@ export async function handleBackup(ctx: Context, db: DB) {
   } catch (error) {
     console.error("Backup failed:", error);
     await ctx.reply("❌ بکاپ ناموفق بود. لطفا دوباره تلاش کنید.", {
+      reply_markup: backToAdminMainMenu(),
+    });
+  }
+}
+
+export function formatBytes(bytes: number): string {
+  const units = ["B", "KB", "MB", "GB", "TB"];
+  let value = bytes;
+  let unitIndex = 0;
+  while (value >= 1024 && unitIndex < units.length - 1) {
+    value /= 1024;
+    unitIndex++;
+  }
+  return `${value.toFixed(unitIndex === 0 ? 0 : 2)} ${units[unitIndex]}`;
+}
+
+export async function getDiskSpace() {
+  const disk = await statfs(process.cwd());
+  const totalBytes = disk.blocks * disk.bsize;
+  const freeBytes = disk.bavail * disk.bsize;
+  const usedBytes = Math.max(0, totalBytes - freeBytes);
+  const usedPercent = totalBytes > 0 ? (usedBytes / totalBytes) * 100 : 0;
+  return { totalBytes, freeBytes, usedBytes, usedPercent };
+}
+
+export async function handleDiskSpace(ctx: Context) {
+  try {
+    const requester = ctx.from?.id!;
+    if (!isOwner(requester)) {
+      if (ctx.callbackQuery) await ctx.answerCallbackQuery({ text: "⛔ فقط مالک" });
+      else await ctx.reply("⛔ فقط مالک به این بخش دسترسی دارد.");
+      return;
+    }
+
+    const { totalBytes, freeBytes, usedBytes, usedPercent } = await getDiskSpace();
+
+    await ctx.reply(
+      `💽 وضعیت فضای دیسک سرور\n\n` +
+        `📦 فضای کل: ${formatBytes(totalBytes)}\n` +
+        `✅ فضای باقی‌مانده: ${formatBytes(freeBytes)}\n` +
+        `📊 فضای مصرف‌شده: ${formatBytes(usedBytes)} (${usedPercent.toFixed(1)}٪)`,
+      { reply_markup: backToAdminMainMenu() },
+    );
+  } catch (error) {
+    console.error("Disk space check failed:", error);
+    await ctx.reply("❌ دریافت اطلاعات فضای دیسک ناموفق بود.", {
       reply_markup: backToAdminMainMenu(),
     });
   }
