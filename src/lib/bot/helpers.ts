@@ -110,11 +110,7 @@ export function isAdminOrOwner(db: DB, tgId: number): boolean {
   return isOwner(tgId) || db.isAdmin(tgId);
 }
 
-/**
- * ADMINs are restricted to receipt review only. Used as a server-side guard on
- * user purchase flows so a manually-crafted callback cannot bypass the UI.
- * The OWNER may still test user flows.
- */
+/** Server-side guard for user flows that remain owner-only for regular admins. */
 export async function restrictAdminToReceipts(ctx: Context, db: DB): Promise<boolean> {
   const tgId = ctx.from?.id!;
   if (isOwner(tgId) || !db.isAdmin(tgId)) return false;
@@ -148,7 +144,7 @@ export async function showPrivilegedMain(ctx: Context, db: DB) {
   const tgId = ctx.from?.id!;
   const pending = db.getPendingOrderCount();
   const kb = isOwner(tgId) ? ownerMainMenu(pending) : adminMainMenu(pending);
-  const text = isOwner(tgId) ? "👑 منوی مدیریت (مالک)" : "🧾 پنل مدیریت رسیدها";
+  const text = isOwner(tgId) ? "👑 منوی مدیریت (مالک)" : "🧾 پنل نماینده";
   if (ctx.callbackQuery) {
     try {
       await ctx.editMessageText(text, { reply_markup: kb });

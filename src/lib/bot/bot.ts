@@ -160,7 +160,6 @@ export class TelBot {
     });
 
     this.bot.callbackQuery("user:buy", async (ctx) => {
-      if (await restrictAdminToReceipts(ctx, db)) return;
       if (!state.isSellActive) {
         await ctx.reply(disableSellTxt, { reply_markup: backToMainMenu() });
         return;
@@ -170,7 +169,6 @@ export class TelBot {
     });
 
     this.bot.callbackQuery("user:renew", async (ctx) => {
-      if (await restrictAdminToReceipts(ctx, db)) return;
       if (!state.isRenewActive) {
         await ctx.reply(disableRenewTxt, { reply_markup: backToMainMenu() });
         return;
@@ -180,7 +178,6 @@ export class TelBot {
     });
 
     this.bot.callbackQuery("user:volume", async (ctx) => {
-      if (await restrictAdminToReceipts(ctx, db)) return;
       await handleCheckAccount(ctx, db);
       await ctx.answerCallbackQuery().catch(() => {});
     });

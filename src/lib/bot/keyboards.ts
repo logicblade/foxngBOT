@@ -96,10 +96,13 @@ export function adminManagementMenu(adminIds: number[]): InlineKeyboard {
 }
 
 export function adminMainMenu(pendingCount: number): InlineKeyboard {
-  return new InlineKeyboard().text(
-    `🧾 مدیریت رسیدها${pendingCount > 0 ? ` (${pendingCount})` : ""}`,
-    "admin:orders",
-  );
+  return new InlineKeyboard()
+    .text(`🧾 مدیریت رسیدها${pendingCount > 0 ? ` (${pendingCount})` : ""}`, "admin:orders")
+    .row()
+    .text("🛒 خرید اشتراک", CB.userBuy)
+    .text("🔄 تمدید اشتراک", CB.userRenew)
+    .row()
+    .text("📊 چقدر حجم دارم؟", CB.userVolume);
 }
 
 export function pendingOrdersMenu(orders: { id: number; tg_id: number; volume_gb: number }[]): InlineKeyboard {
