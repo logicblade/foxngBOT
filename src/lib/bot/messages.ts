@@ -60,7 +60,15 @@ export function discountedPlan(plan: Plan, discountPercent: number): Plan {
   };
 }
 
-export function paymentText(kind: "buy" | "renew", plan: Plan, originalPrice?: number) {
+export function paymentText(
+  kind: "buy" | "renew",
+  plan: Plan,
+  originalPrice?: number,
+  accountDetails: { cardNumber: string; cardOwner: string } = {
+    cardNumber: CARD_NUMBER,
+    cardOwner: CARD_OWNER,
+  },
+) {
   const title = kind === "buy" ? "خرید" : "تمدید";
   const price = originalPrice && originalPrice !== plan.price
     ? `🔥 تخفیف فعال\nقیمت اصلی: ${Util.formatPrice(originalPrice)} تومان\nقیمت با تخفیف: ${Util.formatPrice(plan.price)} تومان`
@@ -69,9 +77,9 @@ export function paymentText(kind: "buy" | "renew", plan: Plan, originalPrice?: n
 ${price}
 📦 ${plan.volumeGB} گیگ | ⏳ ${plan.days} روزه
 
-💳 ${CARD_OWNER} 💳
+💳 ${accountDetails.cardOwner} 💳
 
-<blockquote><code>${CARD_NUMBER}</code></blockquote>
+<blockquote><code>${accountDetails.cardNumber}</code></blockquote>
 🚨(برای کپی کردن شماره کارت روی آن کلیک کنید)
 
 

@@ -4,6 +4,7 @@ import {
   addPanelConv,
   approveOrder,
   awaitingAddAdmin,
+  awaitingAccountUpdate,
   awaitingDiscount,
   awaitingBroadcast,
   awaitingSubscribers,
@@ -42,6 +43,7 @@ import {
   restrictAdminToReceipts,
   showPanelsListToAdmin,
   showAdminManagement,
+  showAccountManagement,
   showDiscountManagement,
   showPrivilegedMain,
   showUserMain,
@@ -53,6 +55,8 @@ import {
 } from "./helpers";
 import {
   SUPPORT_ID,
+  CARD_NUMBER,
+  CARD_OWNER,
   discountedPlan,
   disableRenewTxt,
   disableSellTxt,
@@ -248,7 +252,10 @@ export class TelBot {
         configEmail,
       });
       pendingOrderFlow.set(userId, { type: "buy", orderId });
-      const text = `${paymentText("buy", pricedPlan, plan.price)}\n\n🧾 سفارش #${orderId} ثبت شد (در انتظار رسید).`;
+      const text = `${paymentText("buy", pricedPlan, plan.price, {
+        cardNumber: db.getSetting("card_number", CARD_NUMBER),
+        cardOwner: db.getSetting("card_owner", CARD_OWNER),
+      })}\n\n🧾 سفارش #${orderId} ثبت شد (در انتظار رسید).`;
       await ctx.reply(text, { parse_mode: "HTML", reply_markup: backToMainMenu() });
       await ctx.answerCallbackQuery().catch(() => {});
     });
@@ -288,7 +295,10 @@ export class TelBot {
         targetUUID: flow.targetUUID,
         targetInboundID: flow.targetInboundID,
       });
-      const text = `${paymentText("renew", pricedPlan, plan.price)}\n\n🧾 سفارش #${orderId} ثبت شد (در انتظار رسید).`;
+      const text = `${paymentText("renew", pricedPlan, plan.price, {
+        cardNumber: db.getSetting("card_number", CARD_NUMBER),
+        cardOwner: db.getSetting("card_owner", CARD_OWNER),
+      })}\n\n🧾 سفارش #${orderId} ثبت شد (در انتظار رسید).`;
       await ctx.reply(text, { parse_mode: "HTML", reply_markup: backToMainMenu() });
       await ctx.answerCallbackQuery().catch(() => {});
     });
@@ -350,6 +360,35 @@ export class TelBot {
 
     this.bot.callbackQuery("owner:stats", async (ctx) => {
       await showUserStats(ctx, db);
+      await ctx.answerCallbackQuery().catch(() => {});
+    });
+
+    this.bot.callbackQuery("owner:account", async (ctx) => {
+      if (!isOwner(ctx.from?.id!)) {
+        await ctx.answerCallbackQuery({ text: "⛔ فقط مالک" });
+        return;
+      }
+      await showAccountManagement(ctx, db);
+      await ctx.answerCallbackQuery().catch(() => {});
+    });
+
+    this.bot.callbackQuery("owner:account:number", async (ctx) => {
+      if (!isOwner(ctx.from?.id!)) {
+        await ctx.answerCallbackQuery({ text: "⛔ فقط مالک" });
+        return;
+      }
+      awaitingAccountUpdate.set(ctx.from.id, "card-number");
+      await ctx.reply("شماره کارت ۱۶ رقمی جدید را ارسال کنید:", { reply_markup: cancelActionMenu() });
+      await ctx.answerCallbackQuery().catch(() => {});
+    });
+
+    this.bot.callbackQuery("owner:account:name", async (ctx) => {
+      if (!isOwner(ctx.from?.id!)) {
+        await ctx.answerCallbackQuery({ text: "⛔ فقط مالک" });
+        return;
+      }
+      awaitingAccountUpdate.set(ctx.from.id, "card-owner");
+      await ctx.reply("نام جدید صاحب حساب را ارسال کنید:", { reply_markup: cancelActionMenu() });
       await ctx.answerCallbackQuery().catch(() => {});
     });
 
@@ -562,6 +601,7 @@ export class TelBot {
       awaitingSubscribers.delete(id);
       awaitingAddAdmin.delete(id);
       awaitingDiscount.delete(id);
+      awaitingAccountUpdate.delete(id);
       panelReplaceFlow.delete(id);
       pendingOrderFlow.delete(id);
       if (isAdminOrOwner(db, id)) await showPrivilegedMain(ctx, db);

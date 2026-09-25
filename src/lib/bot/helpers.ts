@@ -2,6 +2,8 @@ import { type Context, InlineKeyboard, InputFile } from "grammy";
 import { statfs } from "node:fs/promises";
 import QRCode from "qrcode";
 import {
+  CARD_NUMBER,
+  CARD_OWNER,
   PLANS,
   justImageTxt,
   noSubFoundTxt,
@@ -14,6 +16,7 @@ import {
   withSupport,
 } from "./messages";
 import {
+  accountManagementMenu,
   adminMainMenu,
   adminManagementMenu,
   backToAdminMainMenu,
@@ -86,6 +89,7 @@ export const awaitingBroadcast = new Set<number>();
 export const awaitingSubscribers = new Set<number>();
 export const awaitingAddAdmin = new Set<number>();
 export const awaitingDiscount = new Set<number>();
+export const awaitingAccountUpdate = new Map<number, "card-number" | "card-owner">();
 
 /** Owner panel-replacement flow: step machine collecting the new panel credentials. */
 export type PanelReplaceState = {
@@ -184,6 +188,20 @@ export async function showAdminManagement(ctx: Context, db: DB) {
     } catch {}
   }
   await ctx.reply(text, { reply_markup: markup });
+}
+
+export async function showAccountManagement(ctx: Context, db: DB) {
+  if (!isOwner(ctx.from?.id!)) return;
+  const cardNumber = db.getSetting("card_number", CARD_NUMBER);
+  const cardOwner = db.getSetting("card_owner", CARD_OWNER);
+  const text = `💳 مدیریت حساب\n\nشماره کارت: ${cardNumber}\nنام صاحب حساب: ${cardOwner}`;
+  if (ctx.callbackQuery) {
+    try {
+      await ctx.editMessageText(text, { reply_markup: accountManagementMenu() });
+      return;
+    } catch {}
+  }
+  await ctx.reply(text, { reply_markup: accountManagementMenu() });
 }
 
 export async function showDiscountManagement(ctx: Context, db: DB) {
@@ -1316,6 +1334,37 @@ async function copyMessageToUser(ctx: Context, targetId: number): Promise<boolea
 export async function handleOwnerComposedMessage(ctx: Context, db: DB): Promise<boolean> {
   const adminId = ctx.from?.id!;
   if (!isOwner(adminId)) return false;
+  const accountField = awaitingAccountUpdate.get(adminId);
+  if (accountField) {
+    const text = ctx.message?.text?.trim() ?? "";
+    if (!text) {
+      await ctx.reply("❌ مقدار خالی است. دوباره وارد کنید یا لغو کنید:", {
+        reply_markup: cancelActionMenu(),
+      });
+      return true;
+    }
+    if (accountField === "card-number") {
+      const cardNumber = text.replace(/[\s-]/g, "");
+      if (!/^\d{16}$/.test(cardNumber)) {
+        await ctx.reply("❌ شماره کارت باید ۱۶ رقم باشد. دوباره وارد کنید:", {
+          reply_markup: cancelActionMenu(),
+        });
+        return true;
+      }
+      db.setSetting("card_number", cardNumber);
+    } else {
+      if (text.length > 100) {
+        await ctx.reply("❌ نام صاحب حساب حداکثر ۱۰۰ نویسه باشد. دوباره وارد کنید:", {
+          reply_markup: cancelActionMenu(),
+        });
+        return true;
+      }
+      db.setSetting("card_owner", text);
+    }
+    awaitingAccountUpdate.delete(adminId);
+    await showAccountManagement(ctx, db);
+    return true;
+  }
   if (awaitingBroadcast.has(adminId)) {
     awaitingBroadcast.delete(adminId);
     const users = db.getAllUsers();

@@ -50,6 +50,8 @@ export function ownerMainMenu(pendingCount: number): InlineKeyboard {
   return new InlineKeyboard()
     .text(`🧾 مدیریت رسیدها${pendingCount > 0 ? ` (${pendingCount})` : ""}`, "admin:orders")
     .row()
+    .text("💳 مدیریت حساب", "owner:account")
+    .row()
     .text("👥 تعداد کاربران", "owner:stats")
     .row()
     .text("📢 پیام همگانی", "owner:broadcast")
@@ -67,6 +69,15 @@ export function ownerMainMenu(pendingCount: number): InlineKeyboard {
     .text("🖥 پنل‌ها", "owner:panels")
     .row()
     .text("⚙️ وضعیت خرید و تمدید", "owner:appstate");
+}
+
+export function accountManagementMenu(): InlineKeyboard {
+  return new InlineKeyboard()
+    .text("💳 تغییر شماره کارت", "owner:account:number")
+    .row()
+    .text("👤 تغییر نام صاحب حساب", "owner:account:name")
+    .row()
+    .text("🔙 بازگشت به منوی مالک", "admin:main");
 }
 
 export function orderCleanupConfirmMenu(): InlineKeyboard {

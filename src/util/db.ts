@@ -213,6 +213,20 @@ export class DB {
     return Number.isFinite(value) && value >= 1 && value <= 100 ? value : 0;
   }
 
+  getSetting(key: string, fallback: string): string {
+    const row = this.db
+      .query("SELECT value FROM app_settings WHERE key = ?")
+      .get(key) as { value: string } | null;
+    return row?.value ?? fallback;
+  }
+
+  setSetting(key: string, value: string): void {
+    this.db.run(
+      "INSERT INTO app_settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+      [key, value],
+    );
+  }
+
   setDiscountPercent(percent: number | null): void {
     if (percent === null || percent <= 0) {
       this.db.run("DELETE FROM app_settings WHERE key = 'global_discount_percent'");
