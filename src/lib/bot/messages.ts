@@ -2,8 +2,8 @@ import type { Plan } from "../types";
 import { Util } from "../../util/util";
 
 export const SUPPORT_ID = process.env.SUPPORT_ID || "@foxngsup";
-export const CARD_NUMBER = process.env.CARD_NUMBER || "5029081059314381";
-export const CARD_OWNER = process.env.CARD_OWNER || "شایان براقی - توسعه تعاون";
+export const CARD_NUMBER = process.env.CARD_NUMBER || "*****";
+export const CARD_OWNER = process.env.CARD_OWNER || "*****";
 
 export function startMessage(name: string) {
   return `🌐 سلام ${name} عزیز! خوش اومدی به ربات FOXNG 🚀
