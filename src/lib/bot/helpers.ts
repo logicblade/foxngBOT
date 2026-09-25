@@ -743,7 +743,13 @@ export async function handleRenewAccount(ctx: Context, db: DB) {
     const keyboard = new InlineKeyboard();
 
     configs.forEach((config, idx) => {
-      keyboard.text(config.email, `renew:${idx}`).row();
+      const isFinished =
+        !config.status ||
+        config.isOff ||
+        (config.expiryTime !== 0 && config.expiryTime <= Date.now()) ||
+        (config.totalBytes !== 0 && config.remainingBytes <= 0);
+      const statusIcon = isFinished ? "🔴" : "🟢";
+      keyboard.text(`${statusIcon} ${Util.removeEmoji(config.email).trim()}`, `renew:${idx}`).row();
     });
     keyboard.text("🔙 بازگشت به منوی اصلی", "user:main");
 
@@ -794,7 +800,7 @@ export async function handleCheckAccount(ctx: Context, db: DB) {
   }
   if (configs.length === 0) {
     const kb = new InlineKeyboard()
-      .text("🛒 خرید اشتراک", "user:buy")
+      .text("🟢 خرید اشتراک", "user:buy")
       .row()
       .text("🔙 بازگشت به منوی اصلی", "user:main");
     await ctx.reply(noSubFoundTxt, { reply_markup: kb });

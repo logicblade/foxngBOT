@@ -13,7 +13,7 @@ export const CB = {
 
 export function userMainMenu(): InlineKeyboard {
   return new InlineKeyboard()
-    .text("🛒 خرید اشتراک", CB.userBuy)
+    .text("🟢 خرید اشتراک", CB.userBuy)
     .text("🔄 تمدید اشتراک", CB.userRenew)
     .row()
     .text("📊 چقدر حجم دارم؟", CB.userVolume)
@@ -99,7 +99,7 @@ export function adminMainMenu(pendingCount: number): InlineKeyboard {
   return new InlineKeyboard()
     .text(`🧾 مدیریت رسیدها${pendingCount > 0 ? ` (${pendingCount})` : ""}`, "admin:orders")
     .row()
-    .text("🛒 خرید اشتراک", CB.userBuy)
+    .text("🟢 خرید اشتراک", CB.userBuy)
     .text("🔄 تمدید اشتراک", CB.userRenew)
     .row()
     .text("📊 چقدر حجم دارم؟", CB.userVolume);

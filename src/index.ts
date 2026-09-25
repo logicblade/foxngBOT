@@ -52,7 +52,7 @@ async function checkDiskSpaceAlert() {
 }
 
 const diskSpaceReminder = new CronJob(
-  "00 00 */8 * * *",
+  "00 00 15 * * *",
   async function () {
     await checkDiskSpaceAlert();
   },

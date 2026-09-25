@@ -2,109 +2,82 @@ import { bot } from "../..";
 import type { DB } from "../../util/db";
 import { Util } from "../../util/util";
 import { getAllPanels } from "../panel/panel";
-import type { Client, ExpiryCheckUser } from "../types";
-import { userMainMenu } from "./keyboards";
+import type { Client } from "../types";
+import { InlineKeyboard } from "grammy";
+
+type ReminderClient = {
+  email: string;
+  tgID: string | number;
+  remark: string;
+  remainingBytes: number | null;
+  remainingDays: number | null;
+};
 
 async function getExpiringClients(db: DB) {
   const panels = getAllPanels(db);
-
-  const clientsDate: ExpiryCheckUser[] = [];
-  const clientsTraffic: ExpiryCheckUser[] = [];
+  const clientsToRemind: ReminderClient[] = [];
 
   for (const panel of panels) {
     const inbounds = await panel.getInbounds();
 
     if (inbounds) {
-      const usersDate: ExpiryCheckUser[] = [];
-      const usersTraffic: ExpiryCheckUser[] = [];
-
       for (const obj of inbounds.obj) {
         obj.settings.clients.forEach((client: Client) => {
           const stat = obj.clientStats.find(
             (s) => s.uuid === client.id || s.email === client.email,
           );
           const used = (stat?.down ?? 0) + (stat?.up ?? 0);
-          const remainingGB = client.totalGB - used;
+          const remainingBytes = client.totalGB === 0
+            ? null
+            : Math.max(0, client.totalGB - used);
           const now = Date.now();
-
-          if (
-            client.expiryTime - now <= Util.getUnixTimeOf({ days: 4 }) &&
-            client.expiryTime !== 0 &&
-            client.enable
-          ) {
-            usersDate.push({
-              email: client.email,
-              tgID: client.tgId || client.comment,
-              remark: obj.remark,
-              remainingDays: Math.max(
+          const remainingDays = client.expiryTime === 0
+            ? null
+            : Math.max(
                 0,
                 Math.ceil((client.expiryTime - now) / Util.getUnixTimeOf({ days: 1 })),
-              ),
-            });
-          }
+              );
+          const daysThresholdReached = remainingDays !== null && remainingDays <= 4;
+          const volumeThresholdReached = remainingBytes !== null && remainingBytes <= Util.gigsToBytes(4);
 
-          if (
-            remainingGB <= Util.gigsToBytes(4) &&
-            client.totalGB !== 0 &&
-            client.enable
-          ) {
-            usersTraffic.push({
+          if (client.enable && (daysThresholdReached || volumeThresholdReached)) {
+            clientsToRemind.push({
               email: client.email,
               tgID: client.tgId || client.comment,
               remark: obj.remark,
-              remainingBytes: Math.max(0, remainingGB),
+              remainingBytes,
+              remainingDays,
             });
           }
         });
       }
-
-      if (usersDate.length > 0) clientsDate.push(...usersDate);
-      if (usersTraffic.length > 0) clientsTraffic.push(...usersTraffic);
     }
   }
 
-  return { clientsDate, clientsTraffic };
+  return clientsToRemind;
 }
 
 export async function informUserExpiry(db: DB) {
-  const { clientsDate, clientsTraffic } = await getExpiringClients(db);
+  const clientsToRemind = await getExpiringClients(db);
 
-  clientsDate.forEach(async (client) => {
-    await bot.bot.api.sendMessage(
-      client.tgID,
-      `
-⚠️ کاربر گرامی ⚠️
+  for (const client of clientsToRemind) {
+    const remainingVolume = client.remainingBytes === null
+      ? "نامحدود"
+      : `${Util.bytesToGB(client.remainingBytes).toFixed(1)} گیگابایت`;
+    const remainingTime = client.remainingDays === null
+      ? "بدون تاریخ انقضا"
+      : `${client.remainingDays} روز`;
 
-‼️ از سرویس اشتراک "${client.remark}-${client.email}"
-(${client.remainingDays ?? 0} روز) باقی مانده است.
-
-میتوانید از قسمت "🔄 تمدید اشتراک" 
-اشتراک خود را تمدید کنید✅
-        `,
-      {
-        reply_markup: userMainMenu()
-          .row()
-          .text("🔙 بازگشت به منوی اصلی", "user:main"),
-      },
-    );
-  });
-
-  clientsTraffic.forEach(async (client) => {
-    await bot.bot.api.sendMessage(
-      client.tgID,
-      `
-⚠️ کاربر گرامی ⚠️
-
-‼️ از سرویس اشتراک "${client.remark}-${client.email}"
-      (${(Util.bytesToGB(client.remainingBytes ?? 0)).toFixed(1)} گیگابایت) حجم باقی مانده است.
-
-      قبل از اتمام حجم می‌توانید با دکمه «🔄 تمدید اشتراک» سرویس خود را شارژ کنید ✅
-        `,
-      {
-        reply_markup: userMainMenu()
-          .row()
-          .text("🔙 بازگشت به منوی اصلی", "user:main"),
-      },
-    );
-  });
+    try {
+      await bot.bot.api.sendMessage(
+        client.tgID,
+        `⚠️ هشدار اشتراک\n\nکانفیگ:\n${client.remark}-${client.email}\n📦 حجم باقی‌مانده: ${remainingVolume}\n⏳ زمان باقی‌مانده: ${remainingTime}\n\nپیشنهاد می‌کنیم قبل از اتمام حجم یا زمان اشتراک، آن را تمدید کنید.`,
+        {
+          reply_markup: new InlineKeyboard().text("🔄 تمدید اشتراک", "user:renew"),
+        },
+      );
+    } catch (error) {
+      console.error(`Failed to send expiry reminder to ${client.tgID}:`, error);
+    }
+  }
 }
