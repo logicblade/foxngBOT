@@ -19,7 +19,7 @@ export function userMainMenu(): InlineKeyboard {
     .text("📊 چقدر حجم دارم؟", CB.userVolume)
     .text("🔗 دریافت لینک کانفیگ", CB.userGetConfig)
     .row()
-    .text("📞 پشتیبانی", CB.userSupport)
+    .text("👨🏻‍💻 پشتیبانی", CB.userSupport)
     .danger();
 }
 
@@ -41,7 +41,7 @@ export function planMenu(prefix: "buy" | "renew", plans = PLANS, discountPercent
     const pricedPlan = discountedPlan(p, discountPercent);
     kb.text(pricedPlan.label, `${prefix}:plan:${p.id}`).row();
   }
-  kb.text("📞 ارتباط با پشتیبانی برای حجم بیشتر", `${prefix}:support`).danger().row();
+  kb.text("👨🏻‍💻 ارتباط با پشتیبانی برای حجم بیشتر", `${prefix}:support`).danger().row();
   kb.text("❌ لغو سفارش", `${prefix}:cancel`).row();
   kb.text("🔙 بازگشت به منوی اصلی", CB.userMain);
   return kb;
