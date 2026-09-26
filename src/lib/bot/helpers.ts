@@ -267,19 +267,8 @@ const replyToAdmin = async (ctx: Context, msg: string) => {
 
 export async function handleStartCommandForUser(ctx: Context, db: DB) {
   const userID = ctx.from?.id!;
-  const known = db.hasUser(userID);
   db.upsertUser(userID, ctx.from?.first_name, ctx.from?.username);
   const init = db.getPanels().length !== 0;
-
-  // Users that were on the old reply-keyboard build keep it cached on their device:
-  // send one message that removes it, then show the inline menu.
-  if (known) {
-    await ctx
-      .reply("✅ منوی ربات به دکمه‌های شیشه‌ای زیر پیام تغییر کرد.", {
-        reply_markup: { remove_keyboard: true },
-      })
-      .catch(() => {});
-  }
 
   if (!init) {
     await ctx.reply("ربات هنوز توسط ادمین راه اندازی نشده است...", {
@@ -729,7 +718,7 @@ export async function handleGetConfig(ctx: Context, db: DB) {
     const keyboard = new InlineKeyboard();
 
     configs.forEach((config, idx) => {
-      keyboard.text(Util.removeEmoji(config.email), `getConfig:${idx}`).row();
+      keyboard.text(Util.removeEmoji(config.email), `getConfig:${idx}`).primary().row();
     });
 
     getConfigCache[ctx.from?.id!] = configs;
@@ -767,7 +756,7 @@ export async function handleRenewAccount(ctx: Context, db: DB) {
         (config.expiryTime !== 0 && config.expiryTime <= Date.now()) ||
         (config.totalBytes !== 0 && config.remainingBytes <= 0);
       const statusIcon = isFinished ? "🔴" : "🟢";
-      keyboard.text(`${statusIcon} ${Util.removeEmoji(config.email).trim()}`, `renew:${idx}`).row();
+      keyboard.text(`${statusIcon} ${Util.removeEmoji(config.email).trim()}`, `renew:${idx}`).primary().row();
     });
     keyboard.text("🔙 بازگشت به منوی اصلی", "user:main");
 
@@ -818,7 +807,7 @@ export async function handleCheckAccount(ctx: Context, db: DB) {
   }
   if (configs.length === 0) {
     const kb = new InlineKeyboard()
-      .text("🟢 خرید اشتراک", "user:buy")
+      .text("💰 خرید اشتراک 🚀", "user:buy").primary()
       .row()
       .text("🔙 بازگشت به منوی اصلی", "user:main");
     await ctx.reply(noSubFoundTxt, { reply_markup: kb });
@@ -843,15 +832,7 @@ export async function handleCheckAccount(ctx: Context, db: DB) {
 
 export async function handleStartCommandForAdmin(ctx: Context, db: DB) {
   const tgId = ctx.from?.id!;
-  const known = db.hasUser(tgId);
   db.upsertUser(tgId, ctx.from?.first_name, ctx.from?.username);
-  if (known) {
-    await ctx
-      .reply("✅ منوی مدیریت به دکمه‌های شیشه‌ای زیر پیام تغییر کرد.", {
-        reply_markup: { remove_keyboard: true },
-      })
-      .catch(() => {});
-  }
   const init = db.getPanels().length !== 0;
   if (!init) {
     await ctx.reply(welcomeAdminTxt, { reply_markup: initialOwnerMenu() });

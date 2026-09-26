@@ -73,7 +73,7 @@ export async function informUserExpiry(db: DB) {
         client.tgID,
         `⚠️ هشدار اشتراک\n\nکانفیگ:\n${client.remark}-${client.email}\n📦 حجم باقی‌مانده: ${remainingVolume}\n⏳ زمان باقی‌مانده: ${remainingTime}\n\nپیشنهاد می‌کنیم قبل از اتمام حجم یا زمان اشتراک، آن را تمدید کنید.`,
         {
-          reply_markup: new InlineKeyboard().text("🔄 تمدید اشتراک", "user:renew"),
+          reply_markup: new InlineKeyboard().text("♻️ تمدید اشتراک", "user:renew").primary(),
         },
       );
     } catch (error) {

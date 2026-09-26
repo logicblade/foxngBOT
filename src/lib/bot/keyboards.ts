@@ -13,11 +13,11 @@ export const CB = {
 
 export function userMainMenu(): InlineKeyboard {
   return new InlineKeyboard()
-    .text("🟢 خرید اشتراک", CB.userBuy)
-    .text("🔄 تمدید اشتراک", CB.userRenew)
+    .text("💰 خرید اشتراک 🚀", CB.userBuy).primary()
+    .text("♻️ تمدید اشتراک", CB.userRenew).primary()
     .row()
-    .text("📊 چقدر حجم دارم؟", CB.userVolume)
-    .text("🔗 دریافت لینک کانفیگ", CB.userGetConfig)
+    .text("📊 چقدر حجم دارم؟", CB.userVolume).primary()
+    .text("🔗 دریافت لینک کانفیگ", CB.userGetConfig).primary()
     .row()
     .text("👨🏻‍💻 پشتیبانی", CB.userSupport)
     .danger();
@@ -39,7 +39,7 @@ export function planMenu(prefix: "buy" | "renew", plans = PLANS, discountPercent
   const kb = new InlineKeyboard();
   for (const p of plans) {
     const pricedPlan = discountedPlan(p, discountPercent);
-    kb.text(pricedPlan.label, `${prefix}:plan:${p.id}`).row();
+    kb.text(pricedPlan.label, `${prefix}:plan:${p.id}`).primary().row();
   }
   kb.text("👨🏻‍💻 ارتباط با پشتیبانی برای حجم بیشتر", `${prefix}:support`).danger().row();
   kb.text("❌ لغو سفارش", `${prefix}:cancel`).row();
@@ -111,8 +111,8 @@ export function adminMainMenu(pendingCount: number): InlineKeyboard {
   return new InlineKeyboard()
     .text(`🧾 مدیریت رسیدها${pendingCount > 0 ? ` (${pendingCount})` : ""}`, "admin:orders")
     .row()
-    .text("🟢 خرید اشتراک", CB.userBuy)
-    .text("🔄 تمدید اشتراک", CB.userRenew)
+    .text("💰 خرید اشتراک 🚀", CB.userBuy)
+    .text("♻️ تمدید اشتراک", CB.userRenew)
     .row()
     .text("📊 چقدر حجم دارم؟", CB.userVolume);
 }
